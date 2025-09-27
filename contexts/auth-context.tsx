@@ -84,7 +84,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return userPermissions.includes(permission)
   }
 
-  // Initialize auth state
+  // Initialize auth state: if we have an access token, fetch profile
   useEffect(() => {
     const initAuth = async () => {
       console.log("[v0] Initializing auth context...")
@@ -103,8 +103,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       } catch (error) {
         console.error("[v0] Auth initialization error:", error)
-        // Clear invalid token
-        localStorage.removeItem("token")
+        // Clear invalid tokens
+        localStorage.removeItem("accessToken")
+        localStorage.removeItem("refreshToken")
       } finally {
         setIsLoading(false)
       }
@@ -118,11 +119,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const response = await apiClient.login(email, password)
 
-    if (response.data?.user) {
-      console.log("[v0] Login successful for:", response.data.user.email)
-      setUser(response.data.user)
+    if (response?.data?.accessToken) {
+      // Fetch profile after successful login
+      const profile = await apiClient.getProfile()
+      if (profile.data) {
+        console.log("[v0] Login successful for:", profile.data.email)
+        setUser(profile.data)
+      }
     } else {
-      throw new Error("Invalid login response")
+      throw new Error("Login fallido (sin tokens)")
     }
   }
 
@@ -135,7 +140,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.error("[v0] Logout API error:", error)
     } finally {
       setUser(null)
-      localStorage.removeItem("token")
+      localStorage.removeItem("accessToken")
+      localStorage.removeItem("refreshToken")
     }
   }
 
@@ -144,7 +150,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     try {
       const response = await apiClient.refreshToken()
-
       if (response.data?.user) {
         console.log("[v0] Token refreshed successfully")
         setUser(response.data.user)

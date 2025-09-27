@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,16 +11,18 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { apiClient } from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
+import { Eye, EyeOff } from "lucide-react"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
   const router = useRouter()
   const { toast } = useToast()
 
-  useState(() => {
+  useEffect(() => {
     console.log("[v0] Login page mounted")
     console.log("[v0] API Base URL from env:", process.env.NEXT_PUBLIC_API_BASE_URL)
   }, [])
@@ -49,13 +51,17 @@ export default function LoginPage() {
 
     try {
       console.log("[v0] Calling apiClient.login...")
-      await apiClient.login(email, password)
-      console.log("[v0] Login successful, redirecting...")
-      toast({
-        title: "Inicio de sesión exitoso",
-        description: "Bienvenido al sistema de salud comunitaria",
-      })
-      router.push("/dashboard")
+      const resp = await apiClient.login(email, password)
+      if (resp?.data?.accessToken) {
+        console.log("[v0] Login successful, redirecting...")
+        toast({
+          title: "Inicio de sesión exitoso",
+          description: "Bienvenido al sistema de salud comunitaria",
+        })
+        router.replace("/dashboard")
+      } else {
+        throw new Error("Login fallido (sin tokens)")
+      }
     } catch (error) {
       console.error("[v0] Login error:", error)
       setError(error instanceof Error ? error.message : "Error al iniciar sesión")
@@ -96,15 +102,28 @@ export default function LoginPage() {
 
             <div className="space-y-2">
               <Label htmlFor="password">Contraseña</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                disabled={isLoading}
-              />
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  disabled={isLoading}
+                  className="pr-10"
+                />
+
+                <button
+                  type="button"
+                  aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                  onClick={() => setShowPassword((s) => !s)}
+                  disabled={isLoading}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground"
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
             </div>
 
             <Button type="submit" className="w-full" disabled={isLoading}>

@@ -26,7 +26,7 @@ export function SessionMonitor() {
     if (!user) return
 
     const checkTokenExpiry = () => {
-      const token = localStorage.getItem("token")
+      const token = localStorage.getItem("accessToken")
       if (!token) return
 
       try {

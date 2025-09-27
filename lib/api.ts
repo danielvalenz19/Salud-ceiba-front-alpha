@@ -1,4 +1,6 @@
-const API_BASE_URL = "http://localhost:4000/api/v1"
+import axios, { AxiosError, AxiosInstance, AxiosResponse, InternalAxiosRequestConfig } from "axios"
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000/api/v1"
 
 export interface ApiResponse<T> {
   data?: T
@@ -53,180 +55,185 @@ export interface MetricaInput {
   valor_den?: number
 }
 
+type LoginResponse = { accessToken: string; refreshToken: string }
+
 class ApiClient {
   private baseURL: string
   private accessToken: string | null = null
-  private refreshToken: string | null = null
+  private refreshTokenValue: string | null = null
+  private instance: AxiosInstance
 
   constructor() {
     this.baseURL = API_BASE_URL
-    console.log("[v0] Using API Base URL:", this.baseURL)
+    console.log("[api] Using API Base URL:", this.baseURL)
     // Load tokens from localStorage on client side
     if (typeof window !== "undefined") {
       this.accessToken = localStorage.getItem("accessToken")
-      this.refreshToken = localStorage.getItem("refreshToken")
-    }
-  }
-
-  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
-    const url = `${this.baseURL}${endpoint}`
-    console.log("[v0] Making API request to:", url)
-    console.log("[v0] Request options:", { method: options.method || "GET", hasAuth: !!this.accessToken })
-
-    const headers: HeadersInit = {
-      "Content-Type": "application/json",
-      ...options.headers,
+      this.refreshTokenValue = localStorage.getItem("refreshToken")
     }
 
-    if (this.accessToken) {
-      headers.Authorization = `Bearer ${this.accessToken}`
+    this.instance = axios.create({
+      baseURL: this.baseURL,
+      headers: { "Content-Type": "application/json" },
+      withCredentials: false,
+    })
+
+    // Inject Authorization header
+    this.instance.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+      const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : this.accessToken
+      if (token) {
+        // Ensure headers exists and set Authorization safely for Axios v1
+        if (!config.headers) {
+          config.headers = {} as any
+        }
+        // Use bracket notation to avoid type narrowing issues
+        ;(config.headers as any)["Authorization"] = `Bearer ${token}`
+      }
+      return config
+    })
+
+    // Handle 401 with single-flight refresh
+    let isRefreshing = false
+    let queue: Array<(t: string) => void> = []
+    const flushQueue = (t: string) => {
+      queue.forEach((cb) => cb(t))
+      queue = []
     }
 
-    try {
-      const response = await fetch(url, {
-        ...options,
-        headers,
-        mode: "cors",
-        credentials: "omit",
-      })
+    this.instance.interceptors.response.use(
+      (r: AxiosResponse) => r,
+      async (error: AxiosError) => {
+        const original: any = error.config
+        if (error.response?.status === 401 && !original?._retry) {
+          original._retry = true
 
-      console.log("[v0] Response status:", response.status)
-      console.log("[v0] Response ok:", response.ok)
+          if (isRefreshing) {
+            return new Promise((resolve) => {
+              queue.push((newToken) => {
+                original.headers.Authorization = `Bearer ${newToken}`
+                resolve(this.instance(original))
+              })
+            })
+          }
 
-      // Handle 401 - try to refresh token
-      if (response.status === 401 && this.refreshToken) {
-        console.log("[v0] Attempting token refresh...")
-        const refreshed = await this.refreshAccessToken()
-        if (refreshed) {
-          // Retry the original request once
-          headers.Authorization = `Bearer ${this.accessToken}`
-          const retryResponse = await fetch(url, {
-            ...options,
-            headers,
-            mode: "cors",
-            credentials: "omit",
-          })
-
-          if (retryResponse.ok) {
-            return await retryResponse.json()
+          try {
+            isRefreshing = true
+            const newToken = await this.refreshAccessToken()
+            flushQueue(newToken)
+            original.headers.Authorization = `Bearer ${newToken}`
+            return this.instance(original)
+          } catch (e) {
+            this.clearTokens()
+            if (typeof window !== "undefined") window.location.href = "/login"
+            return Promise.reject(e)
+          } finally {
+            isRefreshing = false
           }
         }
-
-        // If refresh failed or retry failed, clear tokens and redirect to login
-        this.clearTokens()
-        if (typeof window !== "undefined") {
-          window.location.href = "/login"
-        }
-        throw new Error("Authentication failed")
-      }
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        const errorMessage = errorData.message || errorData.error || `HTTP ${response.status}: ${response.statusText}`
-        console.log("[v0] API Error:", errorMessage)
-        throw new Error(errorMessage)
-      }
-
-      const responseData = await response.json()
-      console.log("[v0] API Response success:", !!responseData)
-      return responseData
-    } catch (error) {
-      console.error("[v0] API request failed:", error)
-      console.error("[v0] Request URL:", url)
-      console.error("[v0] Error type:", error instanceof TypeError ? "Network/CORS" : "Other")
-
-      if (error instanceof TypeError && error.message === "Failed to fetch") {
-        throw new Error(`No se puede conectar al servidor backend en ${this.baseURL}. 
-        
-Asegúrate de que:
-1. El servidor backend esté ejecutándose en el puerto 4000
-2. La URL sea http://localhost:4000/api/v1
-3. El servidor tenga CORS configurado correctamente
-
-Si estás usando una URL diferente, configura la variable de entorno NEXT_PUBLIC_API_BASE_URL.`)
-      }
-
-      throw error
-    }
+        return Promise.reject(error)
+      },
+    )
   }
 
-  private async refreshAccessToken(): Promise<boolean> {
-    if (!this.refreshToken) return false
-
-    try {
-      const response = await fetch(`${this.baseURL}/auth/refresh`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refreshToken: this.refreshToken }),
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        this.setAccessToken(data.accessToken)
-        return true
+  // Adapter to keep existing method signatures using RequestInit-like options
+  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
+    const method = (options.method || "GET").toLowerCase() as any
+    let data: any = undefined
+    if (options.body) {
+      try {
+        data = typeof options.body === "string" ? JSON.parse(options.body) : options.body
+      } catch {
+        data = options.body
       }
-    } catch (error) {
-      console.error("Token refresh failed:", error)
     }
 
-    return false
+    const resp = await this.instance.request({ url: endpoint, method, data, headers: options.headers as any })
+    return resp.data as ApiResponse<T>
   }
 
-  setTokens(accessToken: string, refreshToken: string) {
-    this.accessToken = accessToken
-    this.refreshToken = refreshToken
-    if (typeof window !== "undefined") {
-      localStorage.setItem("accessToken", accessToken)
-      localStorage.setItem("refreshToken", refreshToken)
-    }
-  }
-
-  setAccessToken(accessToken: string) {
+  // ---------- token helpers ----------
+  private setAccessToken(accessToken: string) {
     this.accessToken = accessToken
     if (typeof window !== "undefined") {
       localStorage.setItem("accessToken", accessToken)
+    }
+  }
+
+  setTokens(at: string, rt: string) {
+    this.accessToken = at
+    this.refreshTokenValue = rt
+    if (typeof window !== "undefined") {
+      localStorage.setItem("accessToken", at)
+      localStorage.setItem("refreshToken", rt)
     }
   }
 
   clearTokens() {
     this.accessToken = null
-    this.refreshToken = null
+    this.refreshTokenValue = null
     if (typeof window !== "undefined") {
       localStorage.removeItem("accessToken")
       localStorage.removeItem("refreshToken")
     }
   }
 
-  isAuthenticated(): boolean {
-    return !!this.accessToken
+  private getRefreshToken() {
+    return typeof window !== "undefined" ? localStorage.getItem("refreshToken") : this.refreshTokenValue
   }
 
-  // Auth endpoints
+  isAuthenticated(): boolean {
+    const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : this.accessToken
+    return !!token
+  }
+
+  // ---------- AUTH ----------
   async login(email: string, password: string) {
-    const response = await this.request<{ accessToken: string; refreshToken: string }>("/auth/login", {
-      method: "POST",
-      body: JSON.stringify({ email, password }),
-    })
-
-    if (response.data) {
-      this.setTokens(response.data.accessToken, response.data.refreshToken)
-    }
-
-    return response
+    const { data } = await this.instance.post<LoginResponse>("/auth/login", { email, password })
+    if (data?.accessToken && data?.refreshToken) this.setTokens(data.accessToken, data.refreshToken)
+    return { data }
   }
 
   async logout() {
-    if (this.refreshToken) {
-      try {
-        await this.request("/auth/logout", {
-          method: "POST",
-          body: JSON.stringify({ refreshToken: this.refreshToken }),
-        })
-      } catch (error) {
-        console.error("Logout request failed:", error)
-      }
+    const rt = this.getRefreshToken()
+    try {
+      if (rt) await this.instance.post("/auth/logout", { refreshToken: rt })
+    } finally {
+      this.clearTokens()
     }
-    this.clearTokens()
+  }
+
+  // Internal helper used by interceptor. Returns new accessToken
+  private async refreshAccessToken(): Promise<string> {
+    const rt = this.getRefreshToken()
+    if (!rt) throw new Error("No refresh token")
+    const { data } = await axios.post<{ accessToken: string }>(`${this.baseURL}/auth/refresh`, { refreshToken: rt })
+    if (!data.accessToken) throw new Error("Invalid refresh response")
+    this.setAccessToken(data.accessToken)
+    return data.accessToken
+  }
+
+  // Public method used by UI to extend session and fetch user profile
+  async refreshToken(): Promise<ApiResponse<{ user?: User }>> {
+    await this.refreshAccessToken()
+    try {
+      const profile = await this.getProfile()
+      return { data: { user: profile.data as User } }
+    } catch (e) {
+      return { data: {} }
+    }
+  }
+
+  async getProfile(): Promise<ApiResponse<User>> {
+    try {
+      // Prefer /auth/me if available
+      return await this.request<User>("/auth/me")
+    } catch (e: any) {
+      // Fallback to /users/me if 404
+      if (e?.response?.status === 404) {
+        return await this.request<User>("/users/me")
+      }
+      throw e
+    }
   }
 
   // Users endpoints
@@ -481,3 +488,4 @@ Si estás usando una URL diferente, configura la variable de entorno NEXT_PUBLIC
 }
 
 export const apiClient = new ApiClient()
+export type { LoginResponse }
