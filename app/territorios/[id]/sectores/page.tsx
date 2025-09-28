@@ -202,7 +202,7 @@ export default function TerritorioSectoresPage() {
 
         {/* Sectores Grid */}
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {territorioData.sectores.length === 0 ? (
+          {(territorioData?.sectores?.length ?? 0) === 0 ? (
             <div className="col-span-full text-center py-12">
               <Building className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
               <h3 className="text-lg font-medium text-foreground mb-2">No hay sectores configurados</h3>
@@ -251,11 +251,13 @@ export default function TerritorioSectoresPage() {
 
                       <div className="flex space-x-2">
                         <RoleGuard requiredRole={["admin", "coordinador"]}>
-                          <Button variant="ghost" size="sm" className="flex-1">
-                            <Edit className="h-4 w-4 mr-2" />
-                            Editar
-                          </Button>
-                        </RoleGuard>
+                            <Link href={`/sectores/${sector.sector_id}?edit=1`}>
+                              <Button variant="ghost" size="sm" className="flex-1">
+                                <Edit className="h-4 w-4 mr-2" />
+                                Editar
+                              </Button>
+                            </Link>
+                          </RoleGuard>
                         <AdminOnly>
                           <Button
                             variant="ghost"

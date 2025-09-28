@@ -66,6 +66,7 @@ export default function SectorViviendasPage() {
   const [error, setError] = useState("")
   const [currentPage, setCurrentPage] = useState(1)
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
+  const [gpsOnly, setGpsOnly] = useState(false)
   const { toast } = useToast()
 
   const pageSize = 20
@@ -76,14 +77,29 @@ export default function SectorViviendasPage() {
 
     try {
       const response = await apiClient.getSectorViviendas(sectorId, {
-        withGPS: true,
+        withGPS: gpsOnly,
         page: currentPage,
         limit: pageSize,
       })
 
-      if (response.data) {
-        setViviendasData(response.data)
-      }
+      // Normalize response shapes:
+      // - axios-like: { data: { meta, data, sector } }
+      // - raw controller: { meta, data, sector }
+      // - model intermediate: { total, rows }
+      const payload = response && typeof response === "object" && "data" in response ? (response as any).data : response
+
+      const meta =
+        payload?.meta ?? {
+          page: currentPage,
+          limit: pageSize,
+          total:
+            payload?.total ?? (Array.isArray(payload?.data) ? payload.data.length : payload?.rows?.length ?? 0),
+        }
+
+      const data = payload?.data ?? payload?.rows ?? []
+      const sector = payload?.sector ?? { sector_id: sectorId }
+
+      setViviendasData({ meta, data, sector })
     } catch (error) {
       console.error("Viviendas loading error:", error)
       setError(error instanceof Error ? error.message : "Error al cargar viviendas")
@@ -101,9 +117,10 @@ export default function SectorViviendasPage() {
     if (sectorId) {
       loadViviendas()
     }
-  }, [sectorId, currentPage])
+  }, [sectorId, currentPage, gpsOnly])
 
-  const totalPages = viviendasData ? Math.ceil(viviendasData.meta.total / pageSize) : 1
+  const total = viviendasData?.meta?.total ?? viviendasData?.data?.length ?? 0
+  const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
   if (isLoading) {
     return (
@@ -159,8 +176,21 @@ export default function SectorViviendasPage() {
           <div>
             <h1 className="text-3xl font-bold text-foreground">Viviendas del Sector</h1>
             <p className="text-muted-foreground">
-              Sector ID: {viviendasData.sector.sector_id} | Total: {viviendasData.meta.total} viviendas
+              Sector ID: {viviendasData?.sector?.sector_id ?? sectorId} | Total: {viviendasData?.meta?.total ?? 0} viviendas
             </p>
+            <div className="mt-2">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={gpsOnly}
+                  onChange={(e) => {
+                    setGpsOnly(e.target.checked)
+                    setCurrentPage(1)
+                  }}
+                />
+                <span className="text-muted-foreground">Solo con coordenadas (para mapa)</span>
+              </label>
+            </div>
           </div>
           <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
             <DialogTrigger asChild>
@@ -187,11 +217,20 @@ export default function SectorViviendasPage() {
             <CardDescription>Viviendas registradas en este sector</CardDescription>
           </CardHeader>
           <CardContent>
-            {viviendasData.data.length === 0 ? (
+            {(viviendasData?.data?.length ?? 0) === 0 ? (
               <div className="text-center py-12">
                 <Home className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-                <h3 className="text-lg font-medium text-foreground mb-2">No hay viviendas registradas</h3>
-                <p className="text-muted-foreground mb-4">Crea la primera vivienda para este sector</p>
+                {gpsOnly ? (
+                  <>
+                    <h3 className="text-lg font-medium text-foreground mb-2">No hay viviendas con coordenadas</h3>
+                    <p className="text-muted-foreground mb-4">Quita el filtro "Solo con coordenadas" para ver todas las viviendas.</p>
+                  </>
+                ) : (
+                  <>
+                    <h3 className="text-lg font-medium text-foreground mb-2">No hay viviendas registradas</h3>
+                    <p className="text-muted-foreground mb-4">Crea la primera vivienda para este sector</p>
+                  </>
+                )}
                 <Button onClick={() => setIsCreateDialogOpen(true)}>
                   <Plus className="mr-2 h-4 w-4" />
                   Crear Primera Vivienda
@@ -211,7 +250,7 @@ export default function SectorViviendasPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {viviendasData.data.map((vivienda) => (
+                    {(viviendasData?.data ?? []).map((vivienda) => (
                       <TableRow key={vivienda.vivienda_id}>
                         <TableCell>
                           <Badge variant="secondary">{vivienda.vivienda_id}</Badge>
@@ -257,7 +296,7 @@ export default function SectorViviendasPage() {
                 {totalPages > 1 && (
                   <div className="flex items-center justify-between mt-4">
                     <p className="text-sm text-muted-foreground">
-                      Página {currentPage} de {totalPages} ({viviendasData.meta.total} viviendas total)
+                      P gina {currentPage} de {totalPages} ({total} viviendas total)
                     </p>
                     <div className="flex items-center space-x-2">
                       <Button

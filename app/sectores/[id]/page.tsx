@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { useState, useEffect } from "react"
-import { useParams } from "next/navigation"
+import { useParams, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -48,6 +48,7 @@ interface SectorDetail {
 export default function SectorDetailPage() {
   const params = useParams()
   const sectorId = Number.parseInt(params.id as string)
+  const search = useSearchParams()
 
   const [sector, setSector] = useState<SectorDetail | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -62,7 +63,7 @@ export default function SectorDetailPage() {
     try {
       const response = await apiClient.getSectorById(sectorId)
       if (response.data) {
-        setSector(response.data)
+        setSector(response.data as SectorDetail)
       }
     } catch (error) {
       console.error("Sector loading error:", error)
@@ -82,6 +83,17 @@ export default function SectorDetailPage() {
       loadSector()
     }
   }, [sectorId])
+
+  // Abrir modal si venimos con ?edit=1
+  useEffect(() => {
+    try {
+      if (search?.get("edit") === "1") {
+        setIsEditDialogOpen(true)
+      }
+    } catch (e) {
+      // ignore if search params not available in some render modes
+    }
+  }, [search])
 
   const handleDeleteSector = async () => {
     if (
