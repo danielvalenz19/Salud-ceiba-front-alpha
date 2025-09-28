@@ -293,7 +293,27 @@ class ApiClient {
   }
 
   async getTerritorioSectores(id: number, includeStats = false) {
-    return this.request(`/territorios/${id}/sectores?includeStats=${includeStats}`)
+    // Normaliza la respuesta del backend para soportar tres formas posibles:
+    // 1) Backend viejo: devuelve directamente un array de sectores -> [ ... ]
+    // 2) Backend alineado (OpenAPI): devuelve { territorio: {...}, sectores: [...] }
+    // 3) Backend ya en la forma que el frontend usa: { territorio_id, codigo, nombre, sectores }
+    const resp = await this.request<any>(`/territorios/${id}/sectores?includeStats=${includeStats}`)
+    const raw = resp.data
+
+    // Caso 1: viene solo un array de sectores
+    if (Array.isArray(raw)) {
+      return { data: { territorio_id: id, codigo: "", nombre: "", sectores: raw } }
+    }
+
+    // Caso 2: viene { territorio: {...}, sectores: [...] } -> convertir a forma plana esperada
+    if (raw && typeof raw === "object" && "territorio" in raw && "sectores" in raw) {
+      const territorio = raw.territorio || { territorio_id: id }
+      const sectores = raw.sectores || []
+      return { data: { ...(territorio as any), sectores } }
+    }
+
+    // Caso 3: ya viene en la forma { territorio_id, codigo, nombre, sectores }
+    return resp
   }
 
   // Sectores endpoints

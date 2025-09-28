@@ -138,6 +138,14 @@ export default function TerritorioSectoresPage() {
     )
   }
 
+  // Defensive normalization: el backend puede devolver varias formas.
+  // - forma ideal: { territorio_id, codigo, nombre, sectores: [...] }
+  // - forma antigua: directamente un array de sectores
+  // - forma OpenAPI: { territorio: {...}, sectores: [...] }
+  const sectores: Sector[] = Array.isArray((territorioData as any))
+    ? (territorioData as any)
+    : (territorioData as any).sectores ?? []
+
   return (
     <MainLayout>
       <div className="space-y-6">
