@@ -55,6 +55,9 @@ export interface MetricaInput {
   valor_den?: number
 }
 
+// Helper type for roles returned by the backend
+type Role = { role_id: number; name: string }
+
 type LoginResponse = { accessToken: string; refreshToken: string }
 
 class ApiClient {
@@ -136,19 +139,26 @@ class ApiClient {
   }
 
   // Adapter to keep existing method signatures using RequestInit-like options
+  // Normaliza la respuesta de la API para siempre devolver ApiResponse<T>.
+  // Si la API ya responde { data, meta, message, error } lo respetamos,
+  // si responde un objeto/array/valor plano lo envolvemos en { data: ... }.
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
-    const method = (options.method || "GET").toLowerCase() as any
-    let data: any = undefined
+    const method = (options.method || "GET").toLowerCase() as any;
+    let data: any;
     if (options.body) {
-      try {
-        data = typeof options.body === "string" ? JSON.parse(options.body) : options.body
-      } catch {
-        data = options.body
-      }
+      try { data = typeof options.body === "string" ? JSON.parse(options.body) : options.body; }
+      catch { data = options.body; }
     }
 
-    const resp = await this.instance.request({ url: endpoint, method, data, headers: options.headers as any })
-    return resp.data as ApiResponse<T>
+    const resp = await this.instance.request({ url: endpoint, method, data, headers: options.headers as any });
+    const raw = resp.data;
+
+    // Si ya viene como ApiResponse, devuélvelo tal cual
+    if (raw && typeof raw === "object" && ("data" in raw || "meta" in raw || "message" in raw || "error" in raw)) {
+      return raw as ApiResponse<T>;
+    }
+    // Si viene plano (objeto/array/valor), envuélvelo
+    return { data: raw as T };
   }
 
   // ---------- token helpers ----------
@@ -272,7 +282,9 @@ class ApiClient {
   }
 
   async getRoles() {
-    return this.request<string[]>("/roles")
+    // El backend devuelve Role[] ({ role_id, name }). El frontend espera string[] (nombres).
+    const resp = await this.request<Role[]>('/roles')
+    return { data: (resp.data ?? []).map((r) => r.name) }
   }
 
   // Territorios endpoints
