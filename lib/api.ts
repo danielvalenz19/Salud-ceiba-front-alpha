@@ -212,12 +212,11 @@ class ApiClient {
     return data.accessToken
   }
 
-  // Public method used by UI to extend session and fetch user profile
-  async refreshToken(): Promise<ApiResponse<{ user?: User }>> {
-    await this.refreshAccessToken()
+  // Public method used by UI to extend session: only refreshes tokens and returns new accessToken
+  async refreshToken(): Promise<ApiResponse<{ accessToken?: string }>> {
     try {
-      const profile = await this.getProfile()
-      return { data: { user: profile.data as User } }
+      const newToken = await this.refreshAccessToken()
+      return { data: { accessToken: newToken } }
     } catch (e) {
       return { data: {} }
     }

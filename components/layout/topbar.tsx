@@ -44,19 +44,33 @@ export function Topbar() {
     }
   }
 
-  // Get user initials for avatar
-  const getUserInitials = (name: string) => {
+  // Get user initials for avatar (robust: accept undefined/non-string)
+  const getUserInitials = (nameLike: unknown) => {
+    const name = typeof nameLike === "string" && nameLike.trim() ? nameLike.trim() : ""
+    if (!name) return ""
     return name
-      .split(" ")
-      .map((word) => word.charAt(0))
+      .split(/\s+/)
+      .map((word) => (word ? word.charAt(0) : ""))
       .join("")
       .toUpperCase()
       .slice(0, 2)
   }
 
+  // Robust role normalization helper
+  const toRoleKey = (roleLike: unknown): string => {
+    if (roleLike == null) return ""
+    if (typeof roleLike === "string") return roleLike
+    if (Array.isArray(roleLike)) return toRoleKey(roleLike[0])
+    if (typeof roleLike === "object") {
+      const o = roleLike as any
+      return toRoleKey(o.name ?? o.role ?? o.rol ?? o.type ?? o.id)
+    }
+    return String(roleLike)
+  }
+
   // Get role color variant
-  const getRoleVariant = (role: string) => {
-    switch (role.toLowerCase()) {
+  const getRoleVariant = (roleLike: unknown) => {
+    switch (toRoleKey(roleLike).trim().toLowerCase()) {
       case "admin":
         return "destructive"
       case "coordinador":
@@ -89,11 +103,14 @@ export function Topbar() {
       <div className="flex h-16 items-center justify-between px-6">
         <div className="flex items-center space-x-4">
           <h1 className="text-xl font-bold text-primary">Sistema de Salud Comunitaria</h1>
-          {user && (
-            <Badge variant={getRoleVariant(user.rol)} className="text-xs">
-              {user.rol}
-            </Badge>
-          )}
+          {user && (() => {
+            const displayRole = toRoleKey((user as any).rol ?? (user as any).role) || "Invitado"
+            return (
+              <Badge variant={getRoleVariant(displayRole)} className="text-xs">
+                {displayRole}
+              </Badge>
+            )
+          })()}
         </div>
 
         <div className="flex items-center space-x-4">
@@ -101,7 +118,7 @@ export function Topbar() {
             <div className="hidden md:flex items-center space-x-3 text-sm text-muted-foreground">
               <div className="flex items-center space-x-1">
                 <Clock className="h-4 w-4" />
-                <span>{formatLastLogin(user.ultimo_acceso || user.creado_en)}</span>
+                <span>{formatLastLogin((user as any).ultimo_acceso || user.creado_en)}</span>
               </div>
               <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
                 <Bell className="h-4 w-4" />
@@ -126,8 +143,8 @@ export function Topbar() {
                     <div className="flex flex-col space-y-2">
                       <div className="flex items-center justify-between">
                         <p className="text-sm font-medium leading-none">{user.nombre}</p>
-                        <Badge variant={getRoleVariant(user.rol)} className="text-xs">
-                          {user.rol}
+                        <Badge variant={getRoleVariant((user as any).rol ?? (user as any).role)} className="text-xs">
+                          {toRoleKey((user as any).rol ?? (user as any).role) || "Invitado"}
                         </Badge>
                       </div>
                       <p className="text-xs leading-none text-muted-foreground">{user.email}</p>

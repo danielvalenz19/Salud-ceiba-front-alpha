@@ -84,26 +84,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return userPermissions.includes(permission)
   }
 
-  // Initialize auth state: if we have an access token, fetch profile
+  // Initialize auth state: decode token from localStorage if present
   useEffect(() => {
-    const initAuth = async () => {
-      console.log("[v0] Initializing auth context...")
-
+    const initAuth = () => {
+      console.log("[v0] Initializing auth context (decode token)...")
       try {
-        if (apiClient.isAuthenticated()) {
-          console.log("[v0] Token found, fetching user profile...")
-          const response = await apiClient.getProfile()
-
-          if (response.data) {
-            console.log("[v0] User profile loaded:", response.data.email)
-            setUser(response.data)
-          }
-        } else {
-          console.log("[v0] No valid token found")
+        const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null
+        if (token) {
+          const payload = JSON.parse(atob(token.split(".")[1]))
+          setUser({
+            user_id: payload.user_id || payload.sub,
+            nombre: payload.nombre || payload.name,
+            email: payload.email || payload.sub,
+            rol: payload.rol || payload.role,
+            activo: payload.activo ?? true,
+            creado_en: payload.creado_en || new Date().toISOString(),
+            persona_id: payload.persona_id,
+          })
         }
       } catch (error) {
-        console.error("[v0] Auth initialization error:", error)
-        // Clear invalid tokens
+        console.error("[v0] Auth init decode error:", error)
         localStorage.removeItem("accessToken")
         localStorage.removeItem("refreshToken")
       } finally {
@@ -120,11 +120,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const response = await apiClient.login(email, password)
 
     if (response?.data?.accessToken) {
-      // Fetch profile after successful login
-      const profile = await apiClient.getProfile()
-      if (profile.data) {
-        console.log("[v0] Login successful for:", profile.data.email)
-        setUser(profile.data)
+      try {
+        const at = response.data.accessToken
+        const payload = JSON.parse(atob(at.split(".")[1]))
+        setUser({
+          user_id: payload.user_id || payload.sub,
+          nombre: payload.nombre || payload.name,
+          email: payload.email || payload.sub,
+          rol: payload.rol || payload.role,
+          activo: payload.activo ?? true,
+          creado_en: payload.creado_en || new Date().toISOString(),
+          persona_id: payload.persona_id,
+        })
+      } catch (e) {
+        // If decoding fails, still consider login successful (tokens are stored)
+        console.warn("[v0] Could not decode access token payload", e)
       }
     } else {
       throw new Error("Login fallido (sin tokens)")
@@ -150,9 +160,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     try {
       const response = await apiClient.refreshToken()
-      if (response.data?.user) {
-        console.log("[v0] Token refreshed successfully")
-        setUser(response.data.user)
+      if (response?.data?.accessToken) {
+        const at = response.data.accessToken
+        try {
+          const payload = JSON.parse(atob(at.split(".")[1]))
+          setUser({
+            user_id: payload.user_id || payload.sub,
+            nombre: payload.nombre || payload.name,
+            email: payload.email || payload.sub,
+            rol: payload.rol || payload.role,
+            activo: payload.activo ?? true,
+            creado_en: payload.creado_en || new Date().toISOString(),
+            persona_id: payload.persona_id,
+          })
+        } catch (e) {
+          console.warn("[v0] Could not decode refreshed token payload", e)
+        }
       }
     } catch (error) {
       console.error("[v0] Token refresh failed:", error)

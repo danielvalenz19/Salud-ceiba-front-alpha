@@ -12,6 +12,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { apiClient } from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
 import { Eye, EyeOff } from "lucide-react"
+import { useAuth } from "@/contexts/auth-context"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
@@ -21,6 +22,7 @@ export default function LoginPage() {
   const [error, setError] = useState("")
   const router = useRouter()
   const { toast } = useToast()
+  const { login } = useAuth()
 
   useEffect(() => {
     console.log("[v0] Login page mounted")
@@ -50,18 +52,14 @@ export default function LoginPage() {
     }
 
     try {
-      console.log("[v0] Calling apiClient.login...")
-      const resp = await apiClient.login(email, password)
-      if (resp?.data?.accessToken) {
-        console.log("[v0] Login successful, redirecting...")
-        toast({
-          title: "Inicio de sesión exitoso",
-          description: "Bienvenido al sistema de salud comunitaria",
-        })
-        router.replace("/dashboard")
-      } else {
-        throw new Error("Login fallido (sin tokens)")
-      }
+      console.log("[v0] Calling authContext.login...")
+      await login(email, password)
+      console.log("[v0] Login successful via context, redirecting...")
+      toast({
+        title: "Inicio de sesión exitoso",
+        description: "Bienvenido al sistema de salud comunitaria",
+      })
+      router.replace("/dashboard")
     } catch (error) {
       console.error("[v0] Login error:", error)
       setError(error instanceof Error ? error.message : "Error al iniciar sesión")
