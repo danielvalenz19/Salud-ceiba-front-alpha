@@ -292,6 +292,20 @@ class ApiClient {
     return this.request<Array<{ territorio_id: number; codigo: string; nombre: string }>>("/territorios")
   }
 
+  async createTerritorio(payload: { codigo: string; nombre: string }) {
+    return this.request<{ territorio_id: number; codigo: string; nombre: string }>("/territorios", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    })
+  }
+
+  async updateTerritorio(id: number, payload: { codigo?: string; nombre?: string }) {
+    return this.request<{ territorio_id: number; codigo: string; nombre: string } | { message: string }>(`/territorios/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    })
+  }
+
   async getTerritorioSectores(id: number, includeStats = false) {
     // Normaliza la respuesta del backend para soportar tres formas posibles:
     // 1) Backend viejo: devuelve directamente un array de sectores -> [ ... ]
