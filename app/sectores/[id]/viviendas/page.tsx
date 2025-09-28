@@ -82,21 +82,25 @@ export default function SectorViviendasPage() {
         limit: pageSize,
       })
 
-      // Normalize response shapes:
+      // Normalize response shapes robustly to support:
       // - axios-like: { data: { meta, data, sector } }
       // - raw controller: { meta, data, sector }
       // - model intermediate: { total, rows }
+      // - plain array: [ ... ]
       const payload = response && typeof response === "object" && "data" in response ? (response as any).data : response
 
-      const meta =
-        payload?.meta ?? {
-          page: currentPage,
-          limit: pageSize,
-          total:
-            payload?.total ?? (Array.isArray(payload?.data) ? payload.data.length : payload?.rows?.length ?? 0),
-        }
+      const isArray = Array.isArray(payload)
 
-      const data = payload?.data ?? payload?.rows ?? []
+      const data = isArray ? (payload as any[]) : (payload?.data ?? payload?.rows ?? [])
+
+      const meta = payload?.meta ?? {
+        page: currentPage,
+        limit: pageSize,
+        total: isArray
+          ? (payload as any[]).length
+          : (payload?.total ?? (Array.isArray(payload?.data) ? payload.data.length : payload?.rows?.length ?? 0)),
+      }
+
       const sector = payload?.sector ?? { sector_id: sectorId }
 
       setViviendasData({ meta, data, sector })
