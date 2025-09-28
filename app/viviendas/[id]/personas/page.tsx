@@ -72,9 +72,26 @@ export default function ViviendaPersonasPage() {
         limit: pageSize,
       })
 
-      if (response.data) {
-        setPersonasData(response.data)
-      }
+      // Normalize response shapes robustly to support:
+      // - axios-like: { data: { meta, data, vivienda } }
+      // - raw controller: { meta, data, vivienda }
+      // - model intermediate: { total, rows }
+      // - plain array: [ ... ]
+      const payload = response && typeof response === "object" && "data" in response ? (response as any).data : response
+
+      const isArray = Array.isArray(payload)
+
+      const data: any[] = isArray ? payload : payload?.data ?? payload?.rows ?? []
+
+      const meta =
+        payload?.meta ??
+        (payload?.total !== undefined
+          ? { page: currentPage, limit: pageSize, total: Number(payload.total) }
+          : { page: currentPage, limit: pageSize, total: data.length })
+
+      const vivienda = payload?.vivienda ?? { vivienda_id: viviendaId, codigo_familia: "" }
+
+      setPersonasData({ meta, data, vivienda })
     } catch (error) {
       console.error("Personas loading error:", error)
       setError(error instanceof Error ? error.message : "Error al cargar personas")
