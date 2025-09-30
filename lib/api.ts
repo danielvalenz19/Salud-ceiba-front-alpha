@@ -521,7 +521,8 @@ class ApiClient {
     if (params?.page) searchParams.set("page", params.page.toString())
     if (params?.limit) searchParams.set("limit", params.limit.toString())
 
-    return this.request(`/metricas?${searchParams.toString()}`)
+    // Return an array of metricas by default
+    return this.request<any[]>(`/metricas?${searchParams.toString()}`)
   }
 
   async bulkUpdateMetricas(metricas: MetricaInput[]) {
@@ -529,6 +530,39 @@ class ApiClient {
       method: "PUT",
       body: JSON.stringify(metricas),
     })
+  }
+
+  // Coverage endpoints (vacunacion / nutricion)
+  async getVacunacionCoberturas(params: { territorio_id: number; anio: number }) {
+    const search = `?territorio_id=${params.territorio_id}&anio=${params.anio}`
+    return this.request<any>(`/vacunacion/coberturas${search}`)
+  }
+
+  async getNutricionCoberturas(params: { territorio_id: number; anio: number }) {
+    const search = `?territorio_id=${params.territorio_id}&anio=${params.anio}`
+    return this.request<any>(`/nutricion/coberturas${search}`)
+  }
+
+  // Public health endpoints: morbilidad / mortalidad / ambiente
+  async getMorbilidadCasos(params?: { causa_id?: number; territorio_id?: number; anio?: number; mes?: number }) {
+    const searchParams = new URLSearchParams()
+    if (params?.causa_id) searchParams.set('causa_id', params.causa_id.toString())
+    if (params?.territorio_id) searchParams.set('territorio_id', params.territorio_id.toString())
+    if (params?.anio) searchParams.set('anio', params.anio.toString())
+    if (params?.mes) searchParams.set('mes', params.mes.toString())
+    return this.request<any[]>(`/salud/morbilidad?${searchParams.toString()}`)
+  }
+
+  async createMorbilidadCaso(casoData: { causa_id: number; territorio_id: number; anio: number; mes: number; casos_reportados: number }) {
+    return this.request('/salud/morbilidad', { method: 'POST', body: JSON.stringify(casoData) })
+  }
+
+  async createMortalidadRegistro(registroData: { causa_id: number; territorio_id: number; anio: number; mes: number; defunciones: number }) {
+    return this.request('/salud/mortalidad', { method: 'POST', body: JSON.stringify(registroData) })
+  }
+
+  async createAmbienteMetricas(metricas: any[]) {
+    return this.request('/salud/ambiente/metricas', { method: 'POST', body: JSON.stringify(metricas) })
   }
 }
 

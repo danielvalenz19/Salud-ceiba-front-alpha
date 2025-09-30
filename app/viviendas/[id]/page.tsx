@@ -62,7 +62,7 @@ export default function ViviendaDetailPage() {
     try {
       const response = await apiClient.getViviendaById(viviendaId)
       if (response.data) {
-        setVivienda(response.data)
+        setVivienda(typeof response.data === 'object' ? (response.data as ViviendaDetail) : null)
       }
     } catch (error) {
       console.error("Vivienda loading error:", error)

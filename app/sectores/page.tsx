@@ -59,7 +59,7 @@ export default function SectoresPage() {
       const response = await apiClient.getSectores(params)
 
       if (response.data) {
-        setSectores(response.data)
+        setSectores(Array.isArray(response.data) ? response.data : [])
         setTotalSectores(response.meta?.total || 0)
         setTotalPages(Math.ceil((response.meta?.total || 0) / pageSize))
       }

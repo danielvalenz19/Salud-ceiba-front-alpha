@@ -161,31 +161,22 @@ export default function UsersPage() {
             <h1 className="text-3xl font-bold text-foreground">Gestión de Usuarios</h1>
             <p className="text-muted-foreground">Administra los usuarios del sistema de salud comunitaria</p>
           </div>
-          <AdminOnly
-            fallback={
-              <div className="text-sm text-muted-foreground bg-muted px-3 py-2 rounded-md">
-                Solo administradores pueden crear usuarios
-              </div>
-            }
-            showFallback={true}
-          >
-            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Crear Usuario
-                </Button>
-              </DialogTrigger>
-              <CreateUserDialog
-                roles={roles}
-                onClose={() => setIsCreateDialogOpen(false)}
-                onSuccess={() => {
-                  setIsCreateDialogOpen(false)
-                  loadUsers()
-                }}
-              />
-            </Dialog>
-          </AdminOnly>
+          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="mr-2 h-4 w-4" />
+                Crear Usuario
+              </Button>
+            </DialogTrigger>
+            <CreateUserDialog
+              roles={roles}
+              onClose={() => setIsCreateDialogOpen(false)}
+              onSuccess={() => {
+                setIsCreateDialogOpen(false)
+                loadUsers()
+              }}
+            />
+          </Dialog>
         </div>
 
         {error && (
