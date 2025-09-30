@@ -111,7 +111,9 @@ export default function ViviendaPersonasPage() {
     }
   }, [viviendaId, currentPage])
 
-  const totalPages = personasData ? Math.ceil(personasData.meta.total / pageSize) : 1
+  const totalPages = personasData
+    ? Math.ceil(((personasData.meta && personasData.meta.total) ?? personasData.data.length) / pageSize)
+    : 1
 
   if (isLoading) {
     return (
