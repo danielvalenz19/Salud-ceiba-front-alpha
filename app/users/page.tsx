@@ -290,11 +290,9 @@ export default function UsersPage() {
                             <Button variant="ghost" size="sm" onClick={() => handleViewUser(user)}>
                               <Eye className="h-4 w-4" />
                             </Button>
-                            <RoleGuard requiredRole={["admin", "coordinador"]}>
-                              <Button variant="ghost" size="sm" onClick={() => handleEditUser(user)}>
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                            </RoleGuard>
+                            <Button variant="ghost" size="sm" onClick={() => handleEditUser(user)}>
+                              <Edit className="h-4 w-4" />
+                            </Button>
                             <AdminOnly>
                               <Button
                                 variant="ghost"
