@@ -13,6 +13,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { MainLayout } from "@/components/layout/main-layout"
 import { Building, Eye, Edit, Trash2, ChevronLeft, ChevronRight, Home } from "lucide-react"
 import { apiClient } from "@/lib/api"
+import { Dialog } from "@/components/ui/dialog"
+import { SectorFormDialog } from "@/app/sectores/_components/SectorFormDialog"
 import { useToast } from "@/hooks/use-toast"
 
 interface Sector {
@@ -39,6 +41,7 @@ export default function SectoresPage() {
   const [totalPages, setTotalPages] = useState(1)
   const [totalSectores, setTotalSectores] = useState(0)
   const { toast } = useToast()
+  const [isCreateOpen, setIsCreateOpen] = useState(false)
 
   const pageSize = 20
 
@@ -179,9 +182,23 @@ export default function SectoresPage() {
                 <CardTitle>Sectores ({totalSectores})</CardTitle>
                 <CardDescription>Lista de sectores registrados en el sistema</CardDescription>
               </div>
+              <div>
+                <Button onClick={() => setIsCreateOpen(true)}>Crear sector</Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent>
+            <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+              <SectorFormDialog
+                mode="create"
+                open={isCreateOpen}
+                onOpenChange={setIsCreateOpen}
+                onSuccess={() => {
+                  setIsCreateOpen(false)
+                  loadSectores()
+                }}
+              />
+            </Dialog>
             {isLoading ? (
               <div className="space-y-4">
                 {Array.from({ length: 5 }).map((_, i) => (
@@ -224,9 +241,11 @@ export default function SectoresPage() {
                                 <Home className="h-4 w-4" />
                               </Button>
                             </Link>
-                            <Button variant="ghost" size="sm">
-                              <Edit className="h-4 w-4" />
-                            </Button>
+                            <Link href={`/sectores/${sector.sector_id}?edit=1`}>
+                              <Button variant="ghost" size="sm" aria-label="Editar sector">
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                            </Link>
                             <Button
                               variant="ghost"
                               size="sm"

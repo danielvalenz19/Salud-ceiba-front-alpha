@@ -320,7 +320,8 @@ function CreateSectorDialog({
 }) {
   const [formData, setFormData] = useState({
     nombre: "",
-    geom: "", // TODO: confirm exact payload in current backend (might use referencia_lat/referencia_lng instead of geom)
+    referencia_lat: "",
+    referencia_lng: "",
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState("")
@@ -336,15 +337,21 @@ function CreateSectorDialog({
       setIsSubmitting(false)
       return
     }
+    const lat = Number(formData.referencia_lat)
+    const lng = Number(formData.referencia_lng)
+    if (Number.isNaN(lat) || Number.isNaN(lng)) {
+      setError("Latitud/Longitud inválidas")
+      setIsSubmitting(false)
+      return
+    }
 
     try {
-      const sectorData = {
+      await apiClient.createSector({
         territorio_id: territorioId,
         nombre: formData.nombre.trim(),
-        geom: formData.geom || null, // TODO: confirm exact payload in current backend
-      }
-
-      await apiClient.createSector(sectorData)
+        referencia_lat: lat,
+        referencia_lng: lng,
+      })
 
       toast({
         title: "Sector creado",
@@ -383,15 +390,15 @@ function CreateSectorDialog({
           />
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="geom">Geometría (opcional)</Label>
-          <Input
-            id="geom"
-            value={formData.geom}
-            onChange={(e) => setFormData({ ...formData, geom: e.target.value })}
-            placeholder="Datos geométricos del sector"
-          />
-          <p className="text-xs text-muted-foreground">TODO: confirmar payload exacto en el backend actual</p>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="lat">Latitud</Label>
+            <Input id="lat" type="number" step="any" value={formData.referencia_lat} onChange={(e) => setFormData({ ...formData, referencia_lat: e.target.value })} required />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="lng">Longitud</Label>
+            <Input id="lng" type="number" step="any" value={formData.referencia_lng} onChange={(e) => setFormData({ ...formData, referencia_lng: e.target.value })} required />
+          </div>
         </div>
 
         <DialogFooter>

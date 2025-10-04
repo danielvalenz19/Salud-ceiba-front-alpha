@@ -340,11 +340,19 @@ class ApiClient {
     return this.request(`/sectores?${searchParams.toString()}`)
   }
 
-  async createSector(sectorData: { territorio_id: number; nombre: string; geom: any }) {
-    // TODO: confirm exact payload in current backend (might use referencia_lat/referencia_lng instead of geom)
+  /**
+   * Crear sector
+   * Backend exige: territorio_id, nombre, referencia_lat, referencia_lng
+   */
+  async createSector(payload: {
+    territorio_id: number
+    nombre: string
+    referencia_lat: number
+    referencia_lng: number
+  }) {
     return this.request<{ sector_id: number }>("/sectores", {
       method: "POST",
-      body: JSON.stringify(sectorData),
+      body: JSON.stringify(payload),
     })
   }
 
@@ -352,7 +360,14 @@ class ApiClient {
     return this.request(`/sectores/${id}`)
   }
 
-  async updateSector(id: number, sectorData: any) {
+  /**
+   * Actualizar sector
+   * Acepta nombre y/o referencia_lat/lng (números, 0 es válido)
+   */
+  async updateSector(
+    id: number,
+    sectorData: { nombre?: string; referencia_lat?: number; referencia_lng?: number },
+  ) {
     return this.request(`/sectores/${id}`, {
       method: "PUT",
       body: JSON.stringify(sectorData),
