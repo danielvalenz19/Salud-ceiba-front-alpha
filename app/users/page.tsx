@@ -345,6 +345,7 @@ export default function UsersPage() {
         {selectedUser && (
           <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
             <EditUserDialog
+              key={selectedUser.user_id}
               user={selectedUser}
               roles={roles}
               onClose={() => {
@@ -395,8 +396,9 @@ function CreateUserDialog({
       return
     }
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (!emailRegex.test(formData.email)) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
+    const email = formData.email.trim()
+    if (!emailRegex.test(email)) {
       setError("Por favor ingresa un email válido")
       setIsSubmitting(false)
       return
@@ -404,9 +406,9 @@ function CreateUserDialog({
 
     try {
       const userData: any = {
-        nombre: formData.nombre,
-        email: formData.email,
-        rol: formData.rol,
+        nombre: formData.nombre.trim(),
+        email,
+        rol: (formData.rol || '').toLowerCase(),
         password: formData.password,
       }
 
@@ -529,15 +531,32 @@ function EditUserDialog({
   onSuccess: () => void
 }) {
   const [formData, setFormData] = useState({
-    nombre: user.nombre,
-    email: user.email,
-    rol: user.rol,
+    nombre: user.nombre || "",
+    email: user.email || "",
+    rol: (user.rol || "").toLowerCase(),
     password: "",
-    activo: user.activo,
+    activo: ((): boolean => {
+      const raw = (user as any)?.activo
+      return typeof raw === 'number' ? raw === 1 : Boolean(raw)
+    })(),
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState("")
   const { toast } = useToast()
+
+  useEffect(() => {
+    if (!user) return
+    setFormData({
+      nombre: user.nombre || "",
+      email: user.email || "",
+      rol: (user.rol || "").toLowerCase(),
+      password: "",
+      activo: ((): boolean => {
+        const raw = (user as any)?.activo
+        return typeof raw === 'number' ? raw === 1 : Boolean(raw)
+      })(),
+    })
+  }, [user?.user_id])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -545,18 +564,28 @@ function EditUserDialog({
     setIsSubmitting(true)
 
     try {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
+      const email = (formData.email || "").trim()
+      if (email && !emailRegex.test(email)) {
+        setError("Email inválido. Debe tener dominio con punto (ej: usuario@empresa.com).")
+        setIsSubmitting(false)
+        return
+      }
+
       const updateData: any = {
-        nombre: formData.nombre,
-        email: formData.email,
-        rol: formData.rol,
-        activo: formData.activo,
+        nombre: (formData.nombre || '').trim(),
+        email,
+        rol: (formData.rol || '').toLowerCase(),
+        activo: Boolean(formData.activo),
       }
 
       if (formData.password) {
         updateData.password = formData.password
       }
 
-      await apiClient.updateUser(user.user_id, updateData)
+  console.log('PUT /users/:id URL =>', `/users/${user.user_id}`)
+  console.log('PUT payload =>', updateData)
+  await apiClient.updateUser(user.user_id, updateData)
 
       toast({
         title: "Usuario actualizado",

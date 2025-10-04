@@ -3,6 +3,7 @@ import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import UserForm from '../../../components/users/UserForm'
 import { createUser } from '../../../lib/api/users'
+import { compact } from '../../../lib/clean'
 import { isAdmin } from '../../../lib/session'
 
 export default function NuevoUsuarioPage() {
@@ -14,7 +15,13 @@ export default function NuevoUsuarioPage() {
   async function handleCreate(values: any) {
     setSaving(true)
     try {
-      await createUser({ nombre: values.nombre, email: values.email, password: values.password, rol: values.rol })
+      const payload = compact({
+        nombre: (values.nombre ?? '').trim(),
+        email: (values.email ?? '').trim(),
+        password: (values.password ?? '').trim(),
+        rol: values.rol,
+      }) as { nombre: string; email: string; password: string; rol: 'admin' | 'user' }
+      await createUser(payload)
       router.push('/usuarios')
     } finally {
       setSaving(false)

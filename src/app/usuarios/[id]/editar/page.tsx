@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import UserForm from '../../../../components/users/UserForm'
 import { getUserById, updateUser, type UserDTO } from '../../../../lib/api/users'
+import { compact } from '../../../../lib/clean'
 import { isAdmin } from '../../../../lib/session'
 
 export default function EditarUsuarioPage() {
@@ -29,12 +30,13 @@ export default function EditarUsuarioPage() {
   async function handleUpdate(values: any) {
     setSaving(true)
     try {
-      await updateUser(params.id, {
-        nombre: values.nombre,
-        email: values.email,
+      const payload = compact({
+        nombre: (values.nombre ?? '').trim(),
+        email: (values.email ?? '').trim(),
         rol: values.rol,
-        activo: values.activo ? 1 : 0,
+        activo: Boolean(values.activo),
       })
+      await updateUser(params.id, payload)
       router.push('/usuarios')
     } finally {
       setSaving(false)

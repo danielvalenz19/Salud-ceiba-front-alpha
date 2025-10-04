@@ -59,7 +59,13 @@ export default function UserForm({ mode, initial, onSubmit, submitting }: Props)
 
       <div className="flex flex-col">
         <label className="mb-1 font-medium">Email</label>
-        <input type="email" className="rounded border p-2" value={email} onChange={(e) => setEmail(e.target.value)} required />
+        <input
+          type="email"
+          className="rounded border p-2"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required={mode === 'create'}
+        />
       </div>
 
       {mode === 'create' && (
