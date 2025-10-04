@@ -21,8 +21,20 @@ import {
 import { Textarea } from "@/components/ui/textarea"
 import { Plus, Search, Activity, Users, Clock } from "lucide-react"
 import { apiClient, type Evento } from "@/lib/api"
+import {
+  getIndicadoresByModulo,
+  createEventoClinico,
+  listSectores,
+  type ModuleSlug,
+  type Indicador as IndicadorAPI,
+  type Sector as SectorAPI,
+} from "@/src/lib/api/clinicos"
 import { useToast } from "@/hooks/use-toast"
 import { Skeleton } from "@/components/ui/skeleton"
+import { MainLayout } from "@/components/layout/main-layout"
+import PersonaCombobox from "@/components/eventos/PersonaCombobox"
+import InfoTip from "@/components/shared/InfoTip"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 
 const CLINICAL_MODULES = [
   { id: "vacunacion", name: "Vacunación", color: "bg-blue-500" },
@@ -64,8 +76,26 @@ export default function EventosPage() {
     fecha_evento: "",
     responsable_id: "1", // Default to current user
     detalle_json: "",
-    module: "vacunacion" as "vacunacion" | "nutricion" | "reproductiva" | "epidemiologia",
+    module: "nutricion" as "vacunacion" | "nutricion" | "reproductiva" | "epidemiologia",
   })
+
+  // Indicadores por módulo (dinámico, desde API) y slug de módulo para POST
+  const [moduleSlug, setModuleSlug] = useState<ModuleSlug>("nutricion")
+  const [indicadores, setIndicadores] = useState<IndicadorAPI[]>([])
+  const [sectores, setSectores] = useState<SectorAPI[]>([])
+
+  async function loadIndicadores(mod: ModuleSlug) {
+    try {
+      const res = await getIndicadoresByModulo(mod)
+      setIndicadores(res)
+    } catch (e) {
+      setIndicadores([])
+    }
+  }
+
+  useEffect(() => {
+    listSectores().then(setSectores).catch(() => setSectores([]))
+  }, [])
 
   const loadEventos = async () => {
     try {
@@ -102,10 +132,41 @@ export default function EventosPage() {
     loadEventos()
   }, [currentPage, selectedIndicator])
 
+  // Cargar indicadores del módulo cuando abre el diálogo o cambia el módulo
+  useEffect(() => {
+    // limpia el indicador seleccionado al cambiar de módulo
+    setFormData((prev) => ({ ...prev, ind_id: "" }))
+    loadIndicadores(moduleSlug)
+  }, [moduleSlug])
+
   const handleCreateEvent = async (e: React.FormEvent) => {
     e.preventDefault()
 
     try {
+      // Validaciones de indicador antes del POST
+      if (!formData.ind_id) {
+        toast({ title: "Falta indicador", description: "Selecciona un indicador", variant: "destructive" })
+        return
+      }
+      const indOk = indicadores.some((i) => String(i.ind_id) === String(formData.ind_id))
+      if (!indOk) {
+        toast({
+          title: "Indicador inválido",
+          description: `El indicador seleccionado no pertenece al módulo ${formData.module}.`,
+          variant: "destructive",
+        })
+        return
+      }
+
+      let parsedJson: any | undefined
+      if (formData.detalle_json.trim()) {
+        try {
+          parsedJson = JSON.parse(formData.detalle_json)
+        } catch (err) {
+          toast({ title: "JSON inválido", description: "Revisa el campo Detalles JSON", variant: "destructive" })
+          return
+        }
+      }
       const eventData = {
         persona_id: formData.persona_id ? Number.parseInt(formData.persona_id) : null,
         sector_id: Number.parseInt(formData.sector_id),
@@ -115,10 +176,10 @@ export default function EventosPage() {
         lote: formData.lote || undefined,
         fecha_evento: formData.fecha_evento,
         responsable_id: Number.parseInt(formData.responsable_id),
-        detalle_json: formData.detalle_json ? JSON.parse(formData.detalle_json) : undefined,
+        detalle_json: parsedJson,
       }
 
-      await apiClient.createClinicalEvent(formData.module, eventData)
+  await createEventoClinico(moduleSlug, eventData as any)
 
       toast({
         title: "Evento creado",
@@ -136,7 +197,7 @@ export default function EventosPage() {
         fecha_evento: "",
         responsable_id: "1",
         detalle_json: "",
-        module: "vacunacion",
+        module: "nutricion",
       })
       loadEventos()
     } catch (error) {
@@ -173,7 +234,8 @@ export default function EventosPage() {
   })
 
   return (
-    <div className="space-y-6">
+    <MainLayout>
+      <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
@@ -196,26 +258,28 @@ export default function EventosPage() {
             <form onSubmit={handleCreateEvent} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="module">Módulo Clínico</Label>
-                  <Select
-                    value={formData.module}
-                    onValueChange={(value: any) => setFormData((prev) => ({ ...prev, module: value }))}
-                  >
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="module">Módulo Clínico</Label>
+                    <InfoTip text="El módulo determina la lista de indicadores disponibles." />
+                  </div>
+                  <Select value={moduleSlug} onValueChange={(v) => setModuleSlug(v as any)}>
                     <SelectTrigger>
                       <SelectValue placeholder="Seleccionar módulo" />
                     </SelectTrigger>
                     <SelectContent>
-                      {CLINICAL_MODULES.map((module) => (
-                        <SelectItem key={module.id} value={module.id}>
-                          {module.name}
-                        </SelectItem>
-                      ))}
+                      <SelectItem value="vacunacion">Vacunación</SelectItem>
+                      <SelectItem value="nutricion">Nutrición</SelectItem>
+                      <SelectItem value="reproductiva">Salud Reproductiva</SelectItem>
+                      <SelectItem value="epidemiologia">Epidemiología</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="ind_id">Indicador</Label>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="ind_id">Indicador</Label>
+                    <InfoTip text="El indicador pertenece al módulo seleccionado. La lista se filtra automáticamente." />
+                  </div>
                   <Select
                     value={formData.ind_id}
                     onValueChange={(value) => setFormData((prev) => ({ ...prev, ind_id: value }))}
@@ -224,9 +288,9 @@ export default function EventosPage() {
                       <SelectValue placeholder="Seleccionar indicador" />
                     </SelectTrigger>
                     <SelectContent>
-                      {SAMPLE_INDICATORS.filter((ind) => ind.module === formData.module).map((indicator) => (
-                        <SelectItem key={indicator.id} value={indicator.id.toString()}>
-                          {indicator.name}
+                      {indicadores.map((ind) => (
+                        <SelectItem key={ind.ind_id} value={String(ind.ind_id)}>
+                          {ind.nombre}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -234,26 +298,36 @@ export default function EventosPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="persona_id">ID Persona (opcional)</Label>
-                  <Input
-                    id="persona_id"
-                    type="number"
-                    placeholder="123"
-                    value={formData.persona_id}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, persona_id: e.target.value }))}
+                  <div className="flex items-center justify-between">
+                    <Label>Persona (opcional)</Label>
+                    <InfoTip text="Selecciona la persona a la que pertenece el evento. Puedes dejarlo en 'Sin persona'." />
+                  </div>
+                  <PersonaCombobox
+                    value={formData.persona_id ? Number(formData.persona_id) : null}
+                    onChange={(id) => setFormData((prev) => ({ ...prev, persona_id: id ? String(id) : "" }))}
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="sector_id">ID Sector</Label>
-                  <Input
-                    id="sector_id"
-                    type="number"
-                    placeholder="1"
+                  <div className="flex items-center justify-between">
+                    <Label>Sector</Label>
+                    <InfoTip text="Sector geográfico donde se registró el evento. Este campo es obligatorio." />
+                  </div>
+                  <Select
                     value={formData.sector_id}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, sector_id: e.target.value }))}
-                    required
-                  />
+                    onValueChange={(v) => setFormData((prev) => ({ ...prev, sector_id: v }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar sector" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {sectores.map((s) => (
+                        <SelectItem key={s.sector_id} value={String(s.sector_id)}>
+                          {s.nombre}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="space-y-2">
@@ -289,7 +363,10 @@ export default function EventosPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="fecha_evento">Fecha del Evento</Label>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="fecha_evento">Fecha del Evento</Label>
+                    <InfoTip text="Fecha y hora reales del evento. Se envía en formato ISO (zona local)." />
+                  </div>
                   <Input
                     id="fecha_evento"
                     type="datetime-local"
@@ -301,7 +378,10 @@ export default function EventosPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="detalle_json">Detalles JSON (opcional)</Label>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="detalle_json">Detalles JSON (opcional)</Label>
+                  <InfoTip text='Agrega datos adicionales en formato JSON. Ejemplo: {"temperatura": 36.5}' />
+                </div>
                 <Textarea
                   id="detalle_json"
                   placeholder='{"temperatura": 36.5, "presion": "120/80"}'
@@ -315,7 +395,9 @@ export default function EventosPage() {
                 <Button type="button" variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
                   Cancelar
                 </Button>
-                <Button type="submit">Crear Evento</Button>
+                <Button type="submit" disabled={!formData.ind_id || !formData.sector_id || !formData.fecha_evento}>
+                  Crear Evento
+                </Button>
               </div>
             </form>
           </DialogContent>
@@ -423,12 +505,13 @@ export default function EventosPage() {
                     <TableHead>Valor</TableHead>
                     <TableHead>Fecha</TableHead>
                     <TableHead>Lote</TableHead>
+                    <TableHead className="w-[120px] text-right">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredEventos.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                         No se encontraron eventos clínicos
                       </TableCell>
                     </TableRow>
@@ -473,11 +556,30 @@ export default function EventosPage() {
                             </span>
                           </TableCell>
                           <TableCell>
-                            {evento.valor_texto && evento.valor_texto.includes("LOTE") ? (
+                            {(evento as any).lote ? (
+                              <Badge variant="outline">{(evento as any).lote}</Badge>
+                            ) : evento.valor_texto && evento.valor_texto.includes("LOTE") ? (
                               <Badge variant="outline">{evento.valor_texto}</Badge>
                             ) : (
                               <span className="text-muted-foreground">-</span>
                             )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <a href={`/eventos/${evento.evento_id}`}>
+                                <Button size="sm" variant="outline">Ver</Button>
+                              </a>
+                              {(evento as any).detalle_json && (
+                                <Popover>
+                                  <PopoverTrigger asChild>
+                                    <Button size="sm" variant="ghost">JSON</Button>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-96">
+                                    <pre className="text-xs overflow-auto max-h-64">{JSON.stringify((evento as any).detalle_json, null, 2)}</pre>
+                                  </PopoverContent>
+                                </Popover>
+                              )}
+                            </div>
                           </TableCell>
                         </TableRow>
                       )
@@ -516,6 +618,7 @@ export default function EventosPage() {
           )}
         </CardContent>
       </Card>
-    </div>
+      </div>
+    </MainLayout>
   )
 }

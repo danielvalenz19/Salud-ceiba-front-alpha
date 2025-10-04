@@ -514,6 +514,23 @@ class ApiClient {
   }
 
   // Clinical module endpoints
+  async getIndicadoresPorModulo(module: "vacunacion" | "nutricion" | "reproductiva" | "epidemiologia") {
+    // Intenta forma RESTful: /{module}/indicadores
+    try {
+      const resp = await this.request<any>(`/${module}/indicadores`)
+      const raw = resp.data
+      const list = Array.isArray(raw) ? raw : (raw?.data ?? [])
+      return { data: list as Array<{ ind_id: number; nombre: string }> }
+    } catch (e) {
+      // Fallback por si el backend usa un recurso único con query param
+      const search = new URLSearchParams({ modulo: module }).toString()
+      const resp2 = await this.request<any>(`/indicadores?${search}`)
+      const raw2 = resp2.data
+      const list2 = Array.isArray(raw2) ? raw2 : (raw2?.data ?? [])
+      return { data: list2 as Array<{ ind_id: number; nombre: string }> }
+    }
+  }
+
   async createClinicalEvent(
     module: "vacunacion" | "nutricion" | "reproductiva" | "epidemiologia",
     eventData: {
