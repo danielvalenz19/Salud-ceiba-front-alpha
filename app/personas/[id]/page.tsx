@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useParams } from "next/navigation"
+import { useParams, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -9,6 +9,8 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import PersonaForm, { type PersonaFormValues } from "@/components/personas/PersonaForm"
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -24,11 +26,13 @@ import { useToast } from "@/hooks/use-toast"
 
 export default function PersonaDetailPage() {
   const params = useParams()
+  const searchParams = useSearchParams()
   const personaId = Number.parseInt(params.id as string)
 
   const [persona, setPersona] = useState<PersonaDetail | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState("")
+  const [editOpen, setEditOpen] = useState(false)
   const { toast } = useToast()
 
   const loadPersona = async () => {
@@ -58,6 +62,31 @@ export default function PersonaDetailPage() {
       loadPersona()
     }
   }, [personaId])
+
+  // Open edit automatically if arriving with ?edit=1
+  useEffect(() => {
+    if (searchParams?.get("edit") === "1") {
+      setEditOpen(true)
+    }
+  }, [searchParams])
+
+  async function handleUpdate(values: PersonaFormValues) {
+    try {
+      await apiClient.updatePersona(personaId, {
+        nombres: values.nombres,
+        apellidos: values.apellidos,
+        sexo: values.sexo,
+        fecha_nac: values.fecha_nac,
+        dpi: values.dpi,
+        idioma: values.idioma,
+      } as any)
+      setEditOpen(false)
+      await loadPersona()
+      toast({ title: "Cambios guardados", description: "La persona fue actualizada correctamente." })
+    } catch (e) {
+      toast({ title: "Error", description: "No se pudo actualizar la persona", variant: "destructive" })
+    }
+  }
 
   if (isLoading) {
     return (
@@ -132,7 +161,7 @@ export default function PersonaDetailPage() {
             </div>
           </div>
           <div className="flex items-center space-x-2">
-            <Button variant="outline">
+            <Button variant="outline" onClick={() => setEditOpen(true)}>
               <Edit className="mr-2 h-4 w-4" />
               Editar
             </Button>
@@ -256,7 +285,7 @@ export default function PersonaDetailPage() {
           </CardHeader>
           <CardContent>
             <div className="grid gap-4 md:grid-cols-3">
-              <Button variant="outline" className="h-20 flex-col space-y-2 bg-transparent">
+              <Button variant="outline" className="h-20 flex-col space-y-2 bg-transparent" onClick={() => setEditOpen(true)}>
                 <Edit className="h-6 w-6" />
                 <span>Editar Datos</span>
               </Button>
@@ -271,6 +300,29 @@ export default function PersonaDetailPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Edit dialog */}
+        <Dialog open={editOpen} onOpenChange={setEditOpen}>
+          <DialogContent key={personaId} className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Editar Persona</DialogTitle>
+            </DialogHeader>
+            {persona && (
+              <PersonaForm
+                mode="edit"
+                initial={{
+                  nombres: persona.nombres,
+                  apellidos: persona.apellidos,
+                  sexo: persona.sexo as 'M' | 'F',
+                  fecha_nac: persona.fecha_nac ?? '',
+                  dpi: (persona as any).dpi ?? '',
+                  idioma: (persona as any).idioma ?? '',
+                }}
+                onSubmit={handleUpdate}
+              />
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </MainLayout>
   )

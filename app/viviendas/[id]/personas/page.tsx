@@ -7,9 +7,7 @@ import { useParams } from "next/navigation"
 import Link from "next/link"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+// Inputs moved into reusable PersonaForm
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -34,6 +32,7 @@ import {
 import { MainLayout } from "@/components/layout/main-layout"
 import { Users, Plus, Eye, Edit, ChevronLeft, ChevronRight } from "lucide-react"
 import { apiClient, type PersonaBasic } from "@/lib/api"
+import PersonaForm, { type PersonaFormValues } from "@/components/personas/PersonaForm"
 import { useToast } from "@/hooks/use-toast"
 
 interface ViviendaPersonas {
@@ -58,6 +57,9 @@ export default function ViviendaPersonasPage() {
   const [error, setError] = useState("")
   const [currentPage, setCurrentPage] = useState(1)
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editingData, setEditingData] = useState<PersonaFormValues | null>(null)
   const { toast } = useToast()
 
   const pageSize = 20
@@ -114,6 +116,47 @@ export default function ViviendaPersonasPage() {
   const totalPages = personasData
     ? Math.ceil(((personasData.meta && personasData.meta.total) ?? personasData.data.length) / pageSize)
     : 1
+
+  async function openEdit(personaId: number) {
+    try {
+      const resp = await apiClient.getPersonaById(personaId)
+      const p = resp.data
+      if (!p) return
+      setEditingId(personaId)
+      setEditingData({
+        nombres: p.nombres,
+        apellidos: p.apellidos,
+        sexo: p.sexo as 'M' | 'F',
+        fecha_nac: p.fecha_nac ?? '',
+        dpi: (p as any).dpi ?? '',
+        idioma: (p as any).idioma ?? '',
+      })
+      setIsEditDialogOpen(true)
+    } catch (e) {
+      toast({ title: 'Error', description: 'No se pudo cargar la persona para edición', variant: 'destructive' })
+    }
+  }
+
+  async function handleUpdate(values: PersonaFormValues) {
+    if (!editingId) return
+    try {
+      await apiClient.updatePersona(editingId, {
+        nombres: values.nombres,
+        apellidos: values.apellidos,
+        sexo: values.sexo,
+        fecha_nac: values.fecha_nac,
+        dpi: values.dpi,
+        idioma: values.idioma,
+      } as any)
+      setIsEditDialogOpen(false)
+      setEditingId(null)
+      setEditingData(null)
+      await loadPersonas()
+      toast({ title: 'Cambios guardados', description: 'La persona fue actualizada correctamente.' })
+    } catch (e) {
+      toast({ title: 'Error', description: 'No se pudo actualizar la persona', variant: 'destructive' })
+    }
+  }
 
   if (isLoading) {
     return (
@@ -245,7 +288,7 @@ export default function ViviendaPersonasPage() {
                                 <Eye className="h-4 w-4" />
                               </Button>
                             </Link>
-                            <Button variant="ghost" size="sm">
+                            <Button variant="ghost" size="sm" onClick={() => openEdit(persona.persona_id)} title="Editar persona">
                               <Edit className="h-4 w-4" />
                             </Button>
                           </div>
@@ -287,6 +330,18 @@ export default function ViviendaPersonasPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* Edit Persona Dialog */}
+        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <DialogContent key={editingId ?? undefined} className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Editar Persona</DialogTitle>
+            </DialogHeader>
+            {editingData && (
+              <PersonaForm mode="edit" initial={editingData} onSubmit={handleUpdate} />
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </MainLayout>
   )
@@ -302,51 +357,23 @@ function CreatePersonaDialog({
   onClose: () => void
   onSuccess: () => void
 }) {
-  const [formData, setFormData] = useState({
-    nombres: "",
-    apellidos: "",
-    sexo: "" as "M" | "F" | "",
-    fecha_nac: "",
-    dpi: "",
-    idioma: "",
-  })
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [error, setError] = useState("")
   const { toast } = useToast()
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError("")
-    setIsSubmitting(true)
-
-    if (!formData.nombres.trim() || !formData.apellidos.trim() || !formData.sexo) {
-      setError("Nombres, apellidos y sexo son requeridos")
-      setIsSubmitting(false)
-      return
-    }
-
+  async function handleCreate(values: PersonaFormValues) {
     try {
-      const personaData: any = {
-        nombres: formData.nombres.trim(),
-        apellidos: formData.apellidos.trim(),
-        sexo: formData.sexo,
-        fecha_nac: formData.fecha_nac || undefined,
-        dpi: formData.dpi.trim() || undefined,
-        idioma: formData.idioma.trim() || undefined,
-      }
-
-      await apiClient.createPersonaInVivienda(viviendaId, personaData)
-
-      toast({
-        title: "Persona agregada",
-        description: "La persona ha sido agregada exitosamente a la vivienda",
-      })
+      await apiClient.createPersonaInVivienda(viviendaId, {
+        nombres: values.nombres,
+        apellidos: values.apellidos,
+        sexo: values.sexo,
+        fecha_nac: values.fecha_nac,
+        dpi: values.dpi,
+        idioma: values.idioma,
+      } as any)
+      toast({ title: 'Persona agregada', description: 'La persona ha sido agregada exitosamente a la vivienda' })
       onSuccess()
     } catch (error) {
-      console.error("Persona creation error:", error)
-      setError(error instanceof Error ? error.message : "Error al agregar persona")
-    } finally {
-      setIsSubmitting(false)
+      console.error('Persona creation error:', error)
+      toast({ title: 'Error', description: 'No se pudo agregar la persona', variant: 'destructive' })
     }
   }
 
@@ -356,87 +383,12 @@ function CreatePersonaDialog({
         <DialogTitle>Agregar Nueva Persona</DialogTitle>
         <DialogDescription>Completa la información para agregar una persona a esta vivienda</DialogDescription>
       </DialogHeader>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {error && (
-          <Alert variant="destructive">
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-
-        <div className="space-y-2">
-          <Label htmlFor="nombres">Nombres *</Label>
-          <Input
-            id="nombres"
-            value={formData.nombres}
-            onChange={(e) => setFormData({ ...formData, nombres: e.target.value })}
-            placeholder="Ej: Juan Carlos"
-            required
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="apellidos">Apellidos *</Label>
-          <Input
-            id="apellidos"
-            value={formData.apellidos}
-            onChange={(e) => setFormData({ ...formData, apellidos: e.target.value })}
-            placeholder="Ej: García López"
-            required
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="sexo">Sexo *</Label>
-          <Select value={formData.sexo} onValueChange={(value: "M" | "F") => setFormData({ ...formData, sexo: value })}>
-            <SelectTrigger>
-              <SelectValue placeholder="Seleccionar sexo" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="M">Masculino</SelectItem>
-              <SelectItem value="F">Femenino</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="fecha_nac">Fecha de Nacimiento (opcional)</Label>
-          <Input
-            id="fecha_nac"
-            type="date"
-            value={formData.fecha_nac}
-            onChange={(e) => setFormData({ ...formData, fecha_nac: e.target.value })}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="dpi">DPI (opcional)</Label>
-          <Input
-            id="dpi"
-            value={formData.dpi}
-            onChange={(e) => setFormData({ ...formData, dpi: e.target.value })}
-            placeholder="Ej: 1234567890101"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="idioma">Idioma (opcional)</Label>
-          <Input
-            id="idioma"
-            value={formData.idioma}
-            onChange={(e) => setFormData({ ...formData, idioma: e.target.value })}
-            placeholder="Ej: Español, Q'eqchi'"
-          />
-        </div>
-
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={onClose}>
-            Cancelar
-          </Button>
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? "Agregando..." : "Agregar Persona"}
-          </Button>
-        </DialogFooter>
-      </form>
+      <PersonaForm mode="create" onSubmit={handleCreate} />
+      <DialogFooter>
+        <Button type="button" variant="outline" onClick={onClose}>
+          Cancelar
+        </Button>
+      </DialogFooter>
     </DialogContent>
   )
 }

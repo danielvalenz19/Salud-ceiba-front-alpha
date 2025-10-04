@@ -30,6 +30,7 @@ export interface PersonaBasic {
   dpi?: string
   sexo: "M" | "F"
   fecha_nac?: string
+  idioma?: string
 }
 
 export interface PersonaDetail extends PersonaBasic {
@@ -439,7 +440,7 @@ class ApiClient {
       nombres: string
       apellidos: string
       sexo: "M" | "F"
-      fecha_nac: string
+      fecha_nac?: string
       dpi?: string
       idioma?: string
     },
@@ -465,7 +466,10 @@ class ApiClient {
     return this.request<PersonaDetail>(`/personas/${id}`)
   }
 
-  async updatePersona(id: number, personaData: Partial<PersonaBasic>) {
+  async updatePersona(
+    id: number,
+    personaData: Partial<PersonaBasic & { idioma?: string; fecha_nac?: string }>,
+  ) {
     return this.request(`/personas/${id}`, {
       method: "PUT",
       body: JSON.stringify(personaData),

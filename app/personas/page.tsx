@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { MainLayout } from "@/components/layout/main-layout"
-import { Users, Search, Eye, Edit, ChevronLeft, ChevronRight } from "lucide-react"
+import { Users, Search, Eye, Edit, ChevronLeft, ChevronRight, Pencil } from "lucide-react"
 import { apiClient, type PersonaBasic } from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
 
@@ -191,9 +191,11 @@ export default function PersonasPage() {
                                 <Eye className="h-4 w-4" />
                               </Button>
                             </Link>
-                            <Button variant="ghost" size="sm">
-                              <Edit className="h-4 w-4" />
-                            </Button>
+                            <Link href={`/personas/${persona.persona_id}?edit=1`}>
+                              <Button variant="ghost" size="sm" aria-label="Editar persona">
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                            </Link>
                           </div>
                         </TableCell>
                       </TableRow>
