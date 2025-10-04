@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -21,59 +21,24 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { AlertTriangle, Heart, Leaf, Plus } from "lucide-react"
-import { apiClient } from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
+import {
+  fetchCausas,
+  fetchTerritorios,
+  getMorbilidadCasos,
+  type MorbilidadRow,
+  getMortalidadRegistros,
+  type MortalidadAggRow,
+  type MortalidadDetalleRow,
+  createMorbilidadCaso,
+  createMortalidadRegistro,
+  upsertAmbienteMetricas,
+} from "@/src/services/adminRegs"
 
-interface MorbilidadCaso {
-  caso_id: number
-  causa_id: number
-  causa_nombre: string
-  territorio_id: number
-  territorio_nombre: string
-  anio: number
-  mes: number
-  casos_reportados: number
-  fecha_registro: string
-}
+const toNum = (v: any) => (v === undefined || v === null || v === "" ? undefined : Number(v))
 
-interface MortalidadRegistro {
-  registro_id: number
-  causa_id: number
-  causa_nombre: string
-  territorio_id: number
-  anio: number
-  mes: number
-  defunciones: number
-  fecha_registro: string
-}
-
-interface AmbienteMetrica {
-  metrica_id: number
-  tipo_metrica: string
-  valor: number
-  unidad: string
-  territorio_id: number
-  fecha_medicion: string
-}
-
-const SAMPLE_TERRITORIOS = [
-  { territorio_id: 1, nombre: "Región Central" },
-  { territorio_id: 2, nombre: "Región Norte" },
-  { territorio_id: 3, nombre: "Región Sur" },
-  { territorio_id: 4, nombre: "Región Este" },
-  { territorio_id: 5, nombre: "Región Oeste" },
-]
-
-const SAMPLE_CAUSAS = [
-  { causa_id: 1, nombre: "Dengue" },
-  { causa_id: 2, nombre: "COVID-19" },
-  { causa_id: 3, nombre: "Malaria" },
-  { causa_id: 4, nombre: "Tuberculosis" },
-  { causa_id: 5, nombre: "Diabetes" },
-  { causa_id: 6, nombre: "Hipertensión" },
-  { causa_id: 7, nombre: "Enfermedades cardiovasculares" },
-  { causa_id: 8, nombre: "Cáncer" },
-]
+type Causa = { causa_id: number; nombre: string }
+type Territorio = { territorio_id: number; nombre: string }
 
 const TIPOS_AMBIENTE = [
   "Calidad del aire",
@@ -100,26 +65,39 @@ const MESES = [
 ]
 
 export default function SaludPublicaPage() {
-  const [morbilidadCasos, setMorbilidadCasos] = useState<MorbilidadCaso[]>([])
-  const [mortalidadRegistros, setMortalidadRegistros] = useState<MortalidadRegistro[]>([])
-  const [ambienteMetricas, setAmbienteMetricas] = useState<AmbienteMetrica[]>([])
-  const [loading, setLoading] = useState(false)
+  // catálogos
+  const [causas, setCausas] = useState<Causa[]>([])
+  const [territorios, setTerritorios] = useState<Territorio[]>([])
+
+  // Morbilidad
+  const [morRows, setMorRows] = useState<MorbilidadRow[]>([])
+  const [morLoading, setMorLoading] = useState(false)
+
+  // Mortalidad
+  const [modoMort, setModoMort] = useState<"agregado" | "detalle">("agregado")
+  const [mortAggRows, setMortAggRows] = useState<MortalidadAggRow[]>([])
+  const [mortDetRows, setMortDetRows] = useState<MortalidadDetalleRow[]>([])
+  const [mortLoading, setMortLoading] = useState(false)
+
+  // Ambiente (placeholder contador)
+  const [ambienteCount, setAmbienteCount] = useState(0)
+
   const [activeTab, setActiveTab] = useState("morbilidad")
   const { toast } = useToast()
 
   // Form states for Morbilidad
   const [morbilidadForm, setMorbilidadForm] = useState({
-    causa_id: "0",
-    territorio_id: "0",
+    causa_id: "",
+    territorio_id: "",
     anio: new Date().getFullYear().toString(),
     mes: (new Date().getMonth() + 1).toString(),
-    casos_reportados: "",
+    casos: "",
   })
 
   // Form states for Mortalidad
   const [mortalidadForm, setMortalidadForm] = useState({
-    causa_id: "0",
-    territorio_id: "0",
+    causa_id: "",
+    territorio_id: "",
     anio: new Date().getFullYear().toString(),
     mes: (new Date().getMonth() + 1).toString(),
     defunciones: "",
@@ -127,33 +105,43 @@ export default function SaludPublicaPage() {
 
   // Form states for Ambiente
   const [ambienteForm, setAmbienteForm] = useState({
-    territorio_id: "0",
+    territorio_id: "",
     metricas: "",
   })
 
   // Search filters
   const [searchFilters, setSearchFilters] = useState({
-    causa_id: "0",
-    territorio_id: "0",
+    causa_id: "",
+    territorio_id: "",
     anio: new Date().getFullYear().toString(),
     mes: "",
   })
 
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
-
-  const loadMorbilidadCasos = async () => {
-    try {
-      setLoading(true)
-      const params: any = {}
-      if (searchFilters.causa_id) params.causa_id = Number.parseInt(searchFilters.causa_id)
-      if (searchFilters.territorio_id) params.territorio_id = Number.parseInt(searchFilters.territorio_id)
-      if (searchFilters.anio) params.anio = Number.parseInt(searchFilters.anio)
-      if (searchFilters.mes) params.mes = Number.parseInt(searchFilters.mes)
-
-      const response = await apiClient.getMorbilidadCasos(params)
-      if (response.data) {
-        setMorbilidadCasos(response.data)
+  
+  // catálogos iniciales
+  useEffect(() => {
+    (async () => {
+      try {
+        const [c, t] = await Promise.all([fetchCausas(), fetchTerritorios()])
+        setCausas(c)
+        setTerritorios(t)
+      } catch (e) {
+        console.error(e)
       }
+    })()
+  }, [])
+
+  const cargarMorbilidad = async () => {
+    try {
+      setMorLoading(true)
+      const data = await getMorbilidadCasos({
+        causa_id: toNum(searchFilters.causa_id),
+        territorio_id: toNum(searchFilters.territorio_id),
+        anio: toNum(searchFilters.anio),
+        mes: toNum(searchFilters.mes),
+      })
+      setMorRows(data)
     } catch (error) {
       console.error("Error loading morbilidad casos:", error)
       toast({
@@ -162,22 +150,23 @@ export default function SaludPublicaPage() {
         variant: "destructive",
       })
     } finally {
-      setLoading(false)
+      setMorLoading(false)
     }
   }
 
   const handleCreateMorbilidadCaso = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      const casoData = {
-        causa_id: Number.parseInt(morbilidadForm.causa_id),
-        territorio_id: Number.parseInt(morbilidadForm.territorio_id),
+      const payload = {
         anio: Number.parseInt(morbilidadForm.anio),
         mes: Number.parseInt(morbilidadForm.mes),
-        casos_reportados: Number.parseInt(morbilidadForm.casos_reportados),
+        territorio_id: Number.parseInt(morbilidadForm.territorio_id),
+        datos: [
+          { causa_id: Number.parseInt(morbilidadForm.causa_id), casos: Number.parseInt(morbilidadForm.casos) },
+        ],
       }
 
-      await apiClient.createMorbilidadCaso(casoData)
+      await createMorbilidadCaso(payload)
 
       toast({
         title: "Caso registrado",
@@ -186,13 +175,13 @@ export default function SaludPublicaPage() {
 
       setIsCreateDialogOpen(false)
       setMorbilidadForm({
-        causa_id: "0",
-        territorio_id: "0",
+        causa_id: "",
+        territorio_id: "",
         anio: new Date().getFullYear().toString(),
         mes: (new Date().getMonth() + 1).toString(),
-        casos_reportados: "",
+        casos: "",
       })
-      loadMorbilidadCasos()
+      await cargarMorbilidad()
     } catch (error) {
       console.error("Error creating morbilidad caso:", error)
       toast({
@@ -214,7 +203,7 @@ export default function SaludPublicaPage() {
         defunciones: Number.parseInt(mortalidadForm.defunciones),
       }
 
-      await apiClient.createMortalidadRegistro(registroData)
+  await createMortalidadRegistro(registroData)
 
       toast({
         title: "Registro creado",
@@ -223,8 +212,8 @@ export default function SaludPublicaPage() {
 
       setIsCreateDialogOpen(false)
       setMortalidadForm({
-        causa_id: "0",
-        territorio_id: "0",
+        causa_id: "",
+        territorio_id: "",
         anio: new Date().getFullYear().toString(),
         mes: (new Date().getMonth() + 1).toString(),
         defunciones: "",
@@ -255,7 +244,7 @@ export default function SaludPublicaPage() {
         territorio_id: Number.parseInt(ambienteForm.territorio_id),
       }))
 
-      await apiClient.createAmbienteMetricas(metricasWithTerritorio)
+  await upsertAmbienteMetricas(metricasWithTerritorio)
 
       toast({
         title: "Métricas registradas",
@@ -264,7 +253,7 @@ export default function SaludPublicaPage() {
 
       setIsCreateDialogOpen(false)
       setAmbienteForm({
-        territorio_id: "0",
+        territorio_id: "",
         metricas: "",
       })
     } catch (error) {
@@ -279,15 +268,47 @@ export default function SaludPublicaPage() {
 
   useEffect(() => {
     if (activeTab === "morbilidad") {
-      loadMorbilidadCasos()
+      cargarMorbilidad()
     }
-  }, [activeTab, searchFilters])
+  }, [activeTab])
+
+  const morTotal = useMemo(() => morRows.reduce((s, r) => s + (r.casos || 0), 0), [morRows])
+
+  async function cargarMortalidad() {
+    setMortLoading(true)
+    try {
+      const data = await getMortalidadRegistros({
+        causa_id: toNum(searchFilters.causa_id),
+        territorio_id: toNum(searchFilters.territorio_id),
+        anio: toNum(searchFilters.anio),
+        mes: toNum(searchFilters.mes),
+        modo: modoMort,
+        page: 1,
+        limit: 50,
+      })
+      if (modoMort === "agregado") {
+        setMortAggRows(data as MortalidadAggRow[])
+        setMortDetRows([])
+      } else {
+        setMortDetRows(data as MortalidadDetalleRow[])
+        setMortAggRows([])
+      }
+    } finally {
+      setMortLoading(false)
+    }
+  }
+
+  const mortTotal = useMemo(() => {
+    return modoMort === "agregado"
+      ? mortAggRows.reduce((s, r) => s + (r.total_defunciones || 0), 0)
+      : mortDetRows.reduce((s, r) => s + (r.defunciones || 0), 0)
+  }, [modoMort, mortAggRows, mortDetRows])
 
   const currentYear = new Date().getFullYear()
   const years = Array.from({ length: 5 }, (_, i) => currentYear - i)
 
   return (
-    <div className="space-y-6">
+  <div className="max-w-6xl mx-auto p-4 md:p-6 space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
@@ -303,7 +324,7 @@ export default function SaludPublicaPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Casos de Morbilidad</p>
-                <p className="text-2xl font-bold">{morbilidadCasos.length}</p>
+                <p className="text-2xl font-bold">{morTotal}</p>
               </div>
               <div className="w-12 h-12 rounded-full bg-orange-500 flex items-center justify-center">
                 <AlertTriangle className="h-6 w-6 text-white" />
@@ -317,7 +338,7 @@ export default function SaludPublicaPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Registros de Mortalidad</p>
-                <p className="text-2xl font-bold">{mortalidadRegistros.length}</p>
+                <p className="text-2xl font-bold">{mortTotal}</p>
               </div>
               <div className="w-12 h-12 rounded-full bg-red-500 flex items-center justify-center">
                 <Heart className="h-6 w-6 text-white" />
@@ -331,7 +352,7 @@ export default function SaludPublicaPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Métricas Ambientales</p>
-                <p className="text-2xl font-bold">{ambienteMetricas.length}</p>
+                <p className="text-2xl font-bold">{ambienteCount}</p>
               </div>
               <div className="w-12 h-12 rounded-full bg-green-500 flex items-center justify-center">
                 <Leaf className="h-6 w-6 text-white" />
@@ -390,8 +411,8 @@ export default function SaludPublicaPage() {
                           <SelectValue placeholder="Seleccionar causa" />
                         </SelectTrigger>
                         <SelectContent>
-                          {SAMPLE_CAUSAS.map((causa) => (
-                            <SelectItem key={causa.causa_id} value={causa.causa_id.toString()}>
+                          {causas.map((causa) => (
+                            <SelectItem key={causa.causa_id} value={String(causa.causa_id)}>
                               {causa.nombre}
                             </SelectItem>
                           ))}
@@ -409,8 +430,8 @@ export default function SaludPublicaPage() {
                           <SelectValue placeholder="Seleccionar territorio" />
                         </SelectTrigger>
                         <SelectContent>
-                          {SAMPLE_TERRITORIOS.map((territorio) => (
-                            <SelectItem key={territorio.territorio_id} value={territorio.territorio_id.toString()}>
+                          {territorios.map((territorio) => (
+                            <SelectItem key={territorio.territorio_id} value={String(territorio.territorio_id)}>
                               {territorio.nombre}
                             </SelectItem>
                           ))}
@@ -460,12 +481,12 @@ export default function SaludPublicaPage() {
                   <div className="space-y-2">
                     <Label htmlFor="casos_reportados">Casos Reportados</Label>
                     <Input
-                      id="casos_reportados"
+                      id="casos"
                       type="number"
                       min="0"
                       placeholder="0"
-                      value={morbilidadForm.casos_reportados}
-                      onChange={(e) => setMorbilidadForm((prev) => ({ ...prev, casos_reportados: e.target.value }))}
+                      value={morbilidadForm.casos}
+                      onChange={(e) => setMorbilidadForm((prev) => ({ ...prev, casos: e.target.value }))}
                       required
                     />
                   </div>
@@ -489,15 +510,17 @@ export default function SaludPublicaPage() {
                   <Label>Causa</Label>
                   <Select
                     value={searchFilters.causa_id}
-                    onValueChange={(value) => setSearchFilters((prev) => ({ ...prev, causa_id: value }))}
+                    onValueChange={(value) =>
+                      setSearchFilters((prev) => ({ ...prev, causa_id: value === "__all__" ? "" : value }))
+                    }
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Todas las causas" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="0">Todas las causas</SelectItem>
-                      {SAMPLE_CAUSAS.map((causa) => (
-                        <SelectItem key={causa.causa_id} value={causa.causa_id.toString()}>
+                      <SelectItem value="__all__">Todas las causas</SelectItem>
+                      {causas.map((causa) => (
+                        <SelectItem key={causa.causa_id} value={String(causa.causa_id)}>
                           {causa.nombre}
                         </SelectItem>
                       ))}
@@ -509,15 +532,17 @@ export default function SaludPublicaPage() {
                   <Label>Territorio</Label>
                   <Select
                     value={searchFilters.territorio_id}
-                    onValueChange={(value) => setSearchFilters((prev) => ({ ...prev, territorio_id: value }))}
+                    onValueChange={(value) =>
+                      setSearchFilters((prev) => ({ ...prev, territorio_id: value === "__all__" ? "" : value }))
+                    }
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Todos los territorios" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="0">Todos los territorios</SelectItem>
-                      {SAMPLE_TERRITORIOS.map((territorio) => (
-                        <SelectItem key={territorio.territorio_id} value={territorio.territorio_id.toString()}>
+                      <SelectItem value="__all__">Todos los territorios</SelectItem>
+                      {territorios.map((territorio) => (
+                        <SelectItem key={territorio.territorio_id} value={String(territorio.territorio_id)}>
                           {territorio.nombre}
                         </SelectItem>
                       ))}
@@ -548,13 +573,13 @@ export default function SaludPublicaPage() {
                   <Label>Mes</Label>
                   <Select
                     value={searchFilters.mes}
-                    onValueChange={(value) => setSearchFilters((prev) => ({ ...prev, mes: value }))}
+                    onValueChange={(value) => setSearchFilters((prev) => ({ ...prev, mes: value === "__all__" ? "" : value }))}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Todos los meses" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="0">Todos los meses</SelectItem>
+                      <SelectItem value="__all__">Todos los meses</SelectItem>
                       {MESES.map((mes, index) => (
                         <SelectItem key={index + 1} value={(index + 1).toString()}>
                           {mes}
@@ -562,6 +587,15 @@ export default function SaludPublicaPage() {
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 mt-4">
+                <Button onClick={cargarMorbilidad} disabled={morLoading}>
+                  {morLoading ? "Consultando..." : "Consultar"}
+                </Button>
+                <div className="text-sm text-muted-foreground">
+                  Casos de Morbilidad: <b>{morTotal}</b>
                 </div>
               </div>
             </CardContent>
@@ -574,7 +608,7 @@ export default function SaludPublicaPage() {
               <CardDescription>Lista de casos de morbilidad por causa y territorio</CardDescription>
             </CardHeader>
             <CardContent>
-              {loading ? (
+              {morLoading ? (
                 <div className="space-y-4">
                   {[...Array(5)].map((_, i) => (
                     <Skeleton key={i} className="h-12 w-full" />
@@ -588,34 +622,26 @@ export default function SaludPublicaPage() {
                         <TableHead>Causa</TableHead>
                         <TableHead>Territorio</TableHead>
                         <TableHead>Período</TableHead>
-                        <TableHead>Casos</TableHead>
-                        <TableHead>Fecha Registro</TableHead>
+                        <TableHead className="text-right">Casos</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {morbilidadCasos.length === 0 ? (
+                      {!morLoading && morRows.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                          <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
                             No se encontraron casos de morbilidad
                           </TableCell>
                         </TableRow>
                       ) : (
-                        morbilidadCasos.map((caso) => (
-                          <TableRow key={caso.caso_id}>
-                            <TableCell className="font-medium">{caso.causa_nombre}</TableCell>
-                            <TableCell>{caso.territorio_nombre}</TableCell>
+                        morRows.map((r, idx) => (
+                          <TableRow key={idx}>
+                            <TableCell className="font-medium">{r.causa_nombre ?? r.causa_id}</TableCell>
+                            <TableCell>{r.territorio_nombre ?? r.territorio_id}</TableCell>
                             <TableCell>
-                              <Badge variant="outline">
-                                {MESES[caso.mes - 1]} {caso.anio}
-                              </Badge>
+                              <Badge variant="outline">{String(r.mes).padStart(2, "0")} {r.anio}</Badge>
                             </TableCell>
-                            <TableCell>
-                              <span className="font-mono text-lg font-bold text-orange-600">
-                                {caso.casos_reportados}
-                              </span>
-                            </TableCell>
-                            <TableCell className="text-sm text-muted-foreground">
-                              {new Date(caso.fecha_registro).toLocaleDateString("es-ES")}
+                            <TableCell className="text-right">
+                              <span className="font-mono text-lg font-bold text-orange-600">{r.casos}</span>
                             </TableCell>
                           </TableRow>
                         ))
@@ -660,8 +686,8 @@ export default function SaludPublicaPage() {
                           <SelectValue placeholder="Seleccionar causa" />
                         </SelectTrigger>
                         <SelectContent>
-                          {SAMPLE_CAUSAS.map((causa) => (
-                            <SelectItem key={causa.causa_id} value={causa.causa_id.toString()}>
+                          {causas.map((causa) => (
+                            <SelectItem key={causa.causa_id} value={String(causa.causa_id)}>
                               {causa.nombre}
                             </SelectItem>
                           ))}
@@ -679,8 +705,8 @@ export default function SaludPublicaPage() {
                           <SelectValue placeholder="Seleccionar territorio" />
                         </SelectTrigger>
                         <SelectContent>
-                          {SAMPLE_TERRITORIOS.map((territorio) => (
-                            <SelectItem key={territorio.territorio_id} value={territorio.territorio_id.toString()}>
+                          {territorios.map((territorio) => (
+                            <SelectItem key={territorio.territorio_id} value={String(territorio.territorio_id)}>
                               {territorio.nombre}
                             </SelectItem>
                           ))}
@@ -750,16 +776,120 @@ export default function SaludPublicaPage() {
               </DialogContent>
             </Dialog>
           </div>
-
-          <Card>
-            <CardContent className="p-8 text-center">
-              <Heart className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-              <p className="text-muted-foreground">Funcionalidad de mortalidad en desarrollo</p>
-              <p className="text-sm text-muted-foreground mt-2">
-                Los registros de mortalidad se mostrarán aquí una vez implementados
-              </p>
-            </CardContent>
+          <Card className="p-4">
+            <div className="flex gap-3 items-end">
+              <div className="space-y-2">
+                <Label>Modo</Label>
+                <Select value={modoMort} onValueChange={(v) => setModoMort(v as any)}>
+                  <SelectTrigger className="w-[200px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="agregado">Agregado</SelectItem>
+                    <SelectItem value="detalle">Detalle</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button onClick={cargarMortalidad} disabled={mortLoading}>
+                {mortLoading ? "Consultando..." : "Consultar"}
+              </Button>
+              <div className="text-sm text-muted-foreground">
+                Registros de Mortalidad: <b>{mortTotal}</b>
+              </div>
+            </div>
           </Card>
+
+          {modoMort === "agregado" ? (
+            <Card>
+              <CardContent className="p-0">
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Causa</TableHead>
+                        <TableHead>Territorio</TableHead>
+                        <TableHead>Periodo</TableHead>
+                        <TableHead className="text-right">Defunciones</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {mortLoading && (
+                        <TableRow>
+                          <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                            Cargando…
+                          </TableCell>
+                        </TableRow>
+                      )}
+                      {!mortLoading && mortAggRows.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                            Sin registros
+                          </TableCell>
+                        </TableRow>
+                      )}
+                      {!mortLoading &&
+                        mortAggRows.map((r, i) => (
+                          <TableRow key={i}>
+                            <TableCell>{r.causa_nombre ?? r.causa_id}</TableCell>
+                            <TableCell>{r.territorio_nombre ?? r.territorio_id}</TableCell>
+                            <TableCell>
+                              <Badge variant="outline">{String(r.mes).padStart(2, "0")} {r.anio}</Badge>
+                            </TableCell>
+                            <TableCell className="text-right">{r.total_defunciones}</TableCell>
+                          </TableRow>
+                        ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardContent className="p-0">
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>ID</TableHead>
+                        <TableHead>Causa</TableHead>
+                        <TableHead>Territorio</TableHead>
+                        <TableHead>Fecha</TableHead>
+                        <TableHead className="text-right">Defunciones</TableHead>
+                        <TableHead>Lugar</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {mortLoading && (
+                        <TableRow>
+                          <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                            Cargando…
+                          </TableCell>
+                        </TableRow>
+                      )}
+                      {!mortLoading && mortDetRows.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                            Sin registros
+                          </TableCell>
+                        </TableRow>
+                      )}
+                      {!mortLoading &&
+                        mortDetRows.map((r) => (
+                          <TableRow key={r.registro_id}>
+                            <TableCell>{r.registro_id}</TableCell>
+                            <TableCell>{r.causa_nombre ?? r.causa_id}</TableCell>
+                            <TableCell>{r.territorio_nombre ?? r.territorio_id}</TableCell>
+                            <TableCell>{new Date(r.fecha_defuncion).toLocaleDateString()}</TableCell>
+                            <TableCell className="text-right">{r.defunciones}</TableCell>
+                            <TableCell>{r.lugar_defuncion ?? "-"}</TableCell>
+                          </TableRow>
+                        ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         {/* Ambiente Tab */}
@@ -793,8 +923,8 @@ export default function SaludPublicaPage() {
                         <SelectValue placeholder="Seleccionar territorio" />
                       </SelectTrigger>
                       <SelectContent>
-                        {SAMPLE_TERRITORIOS.map((territorio) => (
-                          <SelectItem key={territorio.territorio_id} value={territorio.territorio_id.toString()}>
+                        {territorios.map((territorio) => (
+                          <SelectItem key={territorio.territorio_id} value={String(territorio.territorio_id)}>
                             {territorio.nombre}
                           </SelectItem>
                         ))}

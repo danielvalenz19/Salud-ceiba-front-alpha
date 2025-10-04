@@ -1,10 +1,10 @@
 import axios from 'axios';
 import { getAccessToken } from '../session';
 
+// Prefer explicit env var, otherwise use relative base to same-origin API gateway
 const baseURL =
-	(typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_API_URL) ||
-	(typeof process !== 'undefined' && (process as any).env?.NEXT_PUBLIC_API_URL) ||
-	'http://localhost:4000/api/v1';
+    (typeof process !== 'undefined' && (process as any).env?.NEXT_PUBLIC_API_URL) ||
+    '/api/v1';
 
 const api = axios.create({ baseURL });
 
