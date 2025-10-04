@@ -580,6 +580,11 @@ class ApiClient {
   }
 
   // Coverage endpoints (vacunacion / nutricion)
+  async getCoberturas(params: { territorio_id: number; anio: number }) {
+    const search = `?territorio_id=${params.territorio_id}&anio=${params.anio}`
+    return this.request<any[]>(`/coberturas${search}`)
+  }
+
   async getVacunacionCoberturas(params: { territorio_id: number; anio: number }) {
     const search = `?territorio_id=${params.territorio_id}&anio=${params.anio}`
     return this.request<any>(`/vacunacion/coberturas${search}`)
