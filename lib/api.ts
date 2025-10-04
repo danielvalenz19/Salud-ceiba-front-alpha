@@ -390,6 +390,14 @@ class ApiClient {
   }
 
   // Viviendas endpoints
+  async listViviendas(params: { page?: number; limit?: number; sector_id?: number; codigo_familia?: string }) {
+    const searchParams = new URLSearchParams()
+    if (params?.page) searchParams.set("page", params.page.toString())
+    if (params?.limit) searchParams.set("limit", params.limit.toString())
+    if (params?.sector_id) searchParams.set("sector_id", params.sector_id.toString())
+    if (params?.codigo_familia) searchParams.set("codigo_familia", params.codigo_familia)
+    return this.request<any>(`/viviendas?${searchParams.toString()}`)
+  }
   async createVivienda(viviendaData: {
     sector_id: number
     codigo_familia: string
@@ -403,6 +411,9 @@ class ApiClient {
     })
   }
 
+  async getVivienda(id: number) {
+    return this.request<any>(`/viviendas/${id}`)
+  }
   async getViviendaById(id: number) {
     return this.request(`/viviendas/${id}`)
   }

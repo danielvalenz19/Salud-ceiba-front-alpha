@@ -68,6 +68,14 @@ export default function SectorViviendasPage() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [gpsOnly, setGpsOnly] = useState(false)
   const { toast } = useToast()
+  const [editOpen, setEditOpen] = useState(false)
+  const [editing, setEditing] = useState<Vivienda | null>(null)
+  const [editCodigo, setEditCodigo] = useState("")
+  const [editDireccion, setEditDireccion] = useState("")
+  const [editLat, setEditLat] = useState("")
+  const [editLng, setEditLng] = useState("")
+  const [editSubmitting, setEditSubmitting] = useState(false)
+  const [editError, setEditError] = useState("")
 
   const pageSize = 20
 
@@ -122,6 +130,17 @@ export default function SectorViviendasPage() {
       loadViviendas()
     }
   }, [sectorId, currentPage, gpsOnly])
+
+  // Prefill edit form when opening modal
+  useEffect(() => {
+    if (editOpen && editing) {
+      setEditCodigo(editing.codigo_familia ?? "")
+      setEditDireccion(editing.direccion ?? "")
+      setEditLat(editing.lat !== undefined && editing.lat !== null ? String(editing.lat) : "")
+      setEditLng(editing.lng !== undefined && editing.lng !== null ? String(editing.lng) : "")
+      setEditError("")
+    }
+  }, [editOpen, editing])
 
   const total = viviendasData?.meta?.total ?? viviendasData?.data?.length ?? 0
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
@@ -281,7 +300,15 @@ export default function SectorViviendasPage() {
                                 <Eye className="h-4 w-4" />
                               </Button>
                             </Link>
-                            <Button variant="ghost" size="sm">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              title="Editar vivienda"
+                              onClick={() => {
+                                setEditing(vivienda)
+                                setEditOpen(true)
+                              }}
+                            >
                               <Edit className="h-4 w-4" />
                             </Button>
                             <Link href={`/viviendas/${vivienda.vivienda_id}/personas`}>
@@ -328,6 +355,124 @@ export default function SectorViviendasPage() {
             )}
           </CardContent>
         </Card>
+        {/* Edit Vivienda Modal */}
+        <Dialog open={editOpen} onOpenChange={(o) => { setEditOpen(o); if (!o) setEditing(null) }}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Editar Vivienda</DialogTitle>
+              <DialogDescription>Actualiza los datos de la vivienda seleccionada</DialogDescription>
+            </DialogHeader>
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault()
+                if (!editing) return
+                setEditError("")
+                setEditSubmitting(true)
+
+                // Validaciones básicas
+                if (!editCodigo.trim()) {
+                  setEditError("El código de familia es requerido")
+                  setEditSubmitting(false)
+                  return
+                }
+
+                if ((editLat && !editLng) || (editLng && !editLat)) {
+                  setEditError("Si proporciona una coordenada debe proporcionar ambas")
+                  setEditSubmitting(false)
+                  return
+                }
+
+                let latVal: number | null = null
+                let lngVal: number | null = null
+                if (editLat && editLng) {
+                  latVal = Number.parseFloat(editLat)
+                  lngVal = Number.parseFloat(editLng)
+                  if (Number.isNaN(latVal) || latVal < -90 || latVal > 90) {
+                    setEditError("La latitud debe estar entre -90 y 90")
+                    setEditSubmitting(false)
+                    return
+                  }
+                  if (Number.isNaN(lngVal) || lngVal < -180 || lngVal > 180) {
+                    setEditError("La longitud debe estar entre -180 y 180")
+                    setEditSubmitting(false)
+                    return
+                  }
+                }
+
+                try {
+                  await apiClient.updateVivienda(editing.vivienda_id, {
+                    codigo_familia: editCodigo.trim(),
+                    direccion: editDireccion.trim() || undefined,
+                    lat: editLat ? latVal : null,
+                    lng: editLng ? lngVal : null,
+                  })
+                  toast({ title: "Vivienda actualizada" })
+                  setEditOpen(false)
+                  setEditing(null)
+                  await loadViviendas()
+                } catch (err: any) {
+                  console.error("update vivienda error", err)
+                  setEditError(err?.message || "Error al actualizar la vivienda")
+                } finally {
+                  setEditSubmitting(false)
+                }
+              }}
+              className="space-y-4"
+            >
+              {editError && (
+                <Alert variant="destructive">
+                  <AlertDescription>{editError}</AlertDescription>
+                </Alert>
+              )}
+
+              <div className="space-y-2">
+                <Label htmlFor="edit_codigo">Código de Familia *</Label>
+                <Input id="edit_codigo" value={editCodigo} onChange={(e) => setEditCodigo(e.target.value)} />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit_direccion">Dirección (opcional)</Label>
+                <Input id="edit_direccion" value={editDireccion} onChange={(e) => setEditDireccion(e.target.value)} />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit_lat">Latitud (opcional)</Label>
+                  <Input
+                    id="edit_lat"
+                    type="number"
+                    step="any"
+                    min="-90"
+                    max="90"
+                    value={editLat}
+                    onChange={(e) => setEditLat(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit_lng">Longitud (opcional)</Label>
+                  <Input
+                    id="edit_lng"
+                    type="number"
+                    step="any"
+                    min="-180"
+                    max="180"
+                    value={editLng}
+                    onChange={(e) => setEditLng(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => { setEditOpen(false); setEditing(null) }}>
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={editSubmitting}>
+                  {editSubmitting ? "Guardando..." : "Guardar"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
     </MainLayout>
   )

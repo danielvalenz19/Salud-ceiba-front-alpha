@@ -27,6 +27,11 @@ const navigation = [
     icon: Building,
   },
   {
+    name: "Viviendas",
+    href: "/viviendas",
+    icon: Building,
+  },
+  {
     name: "Personas",
     href: "/personas",
     icon: UserCheck,
