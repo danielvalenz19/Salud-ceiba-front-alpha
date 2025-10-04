@@ -99,18 +99,20 @@ export default function CoberturasPage() {
     loadCoberturas()
   }, [selectedTerritorio, selectedAnio])
 
-  const formatChartData = (coberturas: CoberturaData[]) => {
-    return coberturas.map((item) => ({
+  const formatChartData = (coberturas?: CoberturaData[]) => {
+    const list = Array.isArray(coberturas) ? coberturas : []
+    return list.map((item) => ({
       mes: MESES[item.mes - 1],
       cobertura: item.cobertura_pct,
       meta: item.meta_pct || 80, // Default meta 80%
     }))
   }
 
-  const calculatePromedio = (coberturas: CoberturaData[]) => {
-    if (!coberturas.length) return 0
-    const sum = coberturas.reduce((acc, item) => acc + item.cobertura_pct, 0)
-    return Math.round((sum / coberturas.length) * 100) / 100
+  const calculatePromedio = (coberturas?: CoberturaData[] | null) => {
+    const list = Array.isArray(coberturas) ? coberturas : []
+    if (!list.length) return 0
+    const sum = list.reduce((acc, item) => acc + item.cobertura_pct, 0)
+    return Math.round((sum / list.length) * 100) / 100
   }
 
   const getStatusColor = (cobertura: number) => {
@@ -221,7 +223,7 @@ export default function CoberturasPage() {
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-sm font-medium text-muted-foreground">Promedio Anual</p>
-                        <p className="text-2xl font-bold">{calculatePromedio(vacunacionData.coberturas)}%</p>
+                        <p className="text-2xl font-bold">{calculatePromedio(vacunacionData?.coberturas)}%</p>
                       </div>
                       <div className={`w-12 h-12 rounded-full bg-blue-500 flex items-center justify-center`}>
                         <Shield className="h-6 w-6 text-white" />
@@ -236,7 +238,7 @@ export default function CoberturasPage() {
                       <div>
                         <p className="text-sm font-medium text-muted-foreground">Mejor Mes</p>
                         <p className="text-2xl font-bold">
-                          {Math.max(...vacunacionData.coberturas.map((c) => c.cobertura_pct))}%
+                          {Math.max(0, ...(vacunacionData?.coberturas?.map((c) => c.cobertura_pct) ?? []))}%
                         </p>
                       </div>
                       <div className="w-12 h-12 rounded-full bg-green-500 flex items-center justify-center">
@@ -252,11 +254,11 @@ export default function CoberturasPage() {
                       <div>
                         <p className="text-sm font-medium text-muted-foreground">Estado General</p>
                         <p className="text-lg font-bold">
-                          {getStatusText(calculatePromedio(vacunacionData.coberturas))}
+                          {getStatusText(calculatePromedio(vacunacionData?.coberturas))}
                         </p>
                       </div>
                       <div
-                        className={`w-12 h-12 rounded-full ${getStatusColor(calculatePromedio(vacunacionData.coberturas))} flex items-center justify-center`}
+                        className={`w-12 h-12 rounded-full ${getStatusColor(calculatePromedio(vacunacionData?.coberturas))} flex items-center justify-center`}
                       >
                         <Calendar className="h-6 w-6 text-white" />
                       </div>
@@ -270,13 +272,13 @@ export default function CoberturasPage() {
                 <CardHeader>
                   <CardTitle>Evolución de Cobertura de Vacunación</CardTitle>
                   <CardDescription>
-                    Cobertura mensual vs meta para {vacunacionData.territorio_nombre} - {vacunacionData.anio}
+                    Cobertura mensual vs meta para {vacunacionData?.territorio_nombre ?? ""} - {vacunacionData?.anio ?? ""}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={formatChartData(vacunacionData.coberturas)}>
+                      <LineChart data={formatChartData(vacunacionData?.coberturas)}>
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="mes" />
                         <YAxis domain={[0, 100]} />
@@ -310,7 +312,7 @@ export default function CoberturasPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {vacunacionData.coberturas.map((item) => (
+                        {(vacunacionData?.coberturas ?? []).map((item) => (
                           <TableRow key={item.mes}>
                             <TableCell className="font-medium">{MESES[item.mes - 1]}</TableCell>
                             <TableCell>
@@ -364,7 +366,7 @@ export default function CoberturasPage() {
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-sm font-medium text-muted-foreground">Promedio Anual</p>
-                        <p className="text-2xl font-bold">{calculatePromedio(nutricionData.coberturas)}%</p>
+                        <p className="text-2xl font-bold">{calculatePromedio(nutricionData?.coberturas)}%</p>
                       </div>
                       <div className={`w-12 h-12 rounded-full bg-green-500 flex items-center justify-center`}>
                         <Heart className="h-6 w-6 text-white" />
@@ -379,7 +381,7 @@ export default function CoberturasPage() {
                       <div>
                         <p className="text-sm font-medium text-muted-foreground">Mejor Mes</p>
                         <p className="text-2xl font-bold">
-                          {Math.max(...nutricionData.coberturas.map((c) => c.cobertura_pct))}%
+                          {Math.max(0, ...(nutricionData?.coberturas?.map((c) => c.cobertura_pct) ?? []))}%
                         </p>
                       </div>
                       <div className="w-12 h-12 rounded-full bg-green-500 flex items-center justify-center">
@@ -395,11 +397,11 @@ export default function CoberturasPage() {
                       <div>
                         <p className="text-sm font-medium text-muted-foreground">Estado General</p>
                         <p className="text-lg font-bold">
-                          {getStatusText(calculatePromedio(nutricionData.coberturas))}
+                          {getStatusText(calculatePromedio(nutricionData?.coberturas))}
                         </p>
                       </div>
                       <div
-                        className={`w-12 h-12 rounded-full ${getStatusColor(calculatePromedio(nutricionData.coberturas))} flex items-center justify-center`}
+                        className={`w-12 h-12 rounded-full ${getStatusColor(calculatePromedio(nutricionData?.coberturas))} flex items-center justify-center`}
                       >
                         <Calendar className="h-6 w-6 text-white" />
                       </div>
@@ -413,13 +415,13 @@ export default function CoberturasPage() {
                 <CardHeader>
                   <CardTitle>Evolución de Cobertura de Nutrición</CardTitle>
                   <CardDescription>
-                    Cobertura mensual vs meta para {nutricionData.territorio_nombre} - {nutricionData.anio}
+                    Cobertura mensual vs meta para {nutricionData?.territorio_nombre ?? ""} - {nutricionData?.anio ?? ""}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={formatChartData(nutricionData.coberturas)}>
+                      <AreaChart data={formatChartData(nutricionData?.coberturas)}>
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="mes" />
                         <YAxis domain={[0, 100]} />
@@ -453,7 +455,7 @@ export default function CoberturasPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {nutricionData.coberturas.map((item) => (
+                        {(nutricionData?.coberturas ?? []).map((item) => (
                           <TableRow key={item.mes}>
                             <TableCell className="font-medium">{MESES[item.mes - 1]}</TableCell>
                             <TableCell>

@@ -21,18 +21,11 @@ import {
 import { Textarea } from "@/components/ui/textarea"
 import { Plus, Search, Activity, Users, Clock } from "lucide-react"
 import { apiClient, type Evento } from "@/lib/api"
-import {
-  getIndicadoresByModulo,
-  createEventoClinico,
-  listSectores,
-  type ModuleSlug,
-  type Indicador as IndicadorAPI,
-  type Sector as SectorAPI,
-} from "@/src/lib/api/clinicos"
+import { createEventoClinico, listSectores, type ModuleSlug, type Sector as SectorAPI } from "@/src/lib/api/clinicos"
 import { useToast } from "@/hooks/use-toast"
 import { Skeleton } from "@/components/ui/skeleton"
 import { MainLayout } from "@/components/layout/main-layout"
-import PersonaCombobox from "@/components/eventos/PersonaCombobox"
+import PersonaSelectList from "@/src/components/eventos/PersonaSelectList"
 import InfoTip from "@/components/shared/InfoTip"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 
@@ -81,16 +74,14 @@ export default function EventosPage() {
 
   // Indicadores por módulo (dinámico, desde API) y slug de módulo para POST
   const [moduleSlug, setModuleSlug] = useState<ModuleSlug>("nutricion")
-  const [indicadores, setIndicadores] = useState<IndicadorAPI[]>([])
   const [sectores, setSectores] = useState<SectorAPI[]>([])
 
-  async function loadIndicadores(mod: ModuleSlug) {
-    try {
-      const res = await getIndicadoresByModulo(mod)
-      setIndicadores(res)
-    } catch (e) {
-      setIndicadores([])
-    }
+  // Indicador por defecto por módulo (ajusta IDs a los de tu backend si varían)
+  const DEFAULT_INDICADOR_BY_MODULE: Record<ModuleSlug, number> = {
+    vacunacion: 1,
+    nutricion: 101,
+    saludreproductiva: 101,
+    epidemiologia: 201,
   }
 
   useEffect(() => {
@@ -133,30 +124,14 @@ export default function EventosPage() {
   }, [currentPage, selectedIndicator])
 
   // Cargar indicadores del módulo cuando abre el diálogo o cambia el módulo
-  useEffect(() => {
-    // limpia el indicador seleccionado al cambiar de módulo
-    setFormData((prev) => ({ ...prev, ind_id: "" }))
-    loadIndicadores(moduleSlug)
-  }, [moduleSlug])
+  // Ya no se carga indicador; se usará uno por defecto según moduleSlug
 
   const handleCreateEvent = async (e: React.FormEvent) => {
     e.preventDefault()
 
     try {
-      // Validaciones de indicador antes del POST
-      if (!formData.ind_id) {
-        toast({ title: "Falta indicador", description: "Selecciona un indicador", variant: "destructive" })
-        return
-      }
-      const indOk = indicadores.some((i) => String(i.ind_id) === String(formData.ind_id))
-      if (!indOk) {
-        toast({
-          title: "Indicador inválido",
-          description: `El indicador seleccionado no pertenece al módulo ${formData.module}.`,
-          variant: "destructive",
-        })
-        return
-      }
+      // Indicador: se usará un id por defecto según el módulo
+      const indId = DEFAULT_INDICADOR_BY_MODULE[moduleSlug]
 
       let parsedJson: any | undefined
       if (formData.detalle_json.trim()) {
@@ -169,8 +144,8 @@ export default function EventosPage() {
       }
       const eventData = {
         persona_id: formData.persona_id ? Number.parseInt(formData.persona_id) : null,
-        sector_id: Number.parseInt(formData.sector_id),
-        ind_id: Number.parseInt(formData.ind_id),
+        sector_id: formData.sector_id ? Number.parseInt(formData.sector_id) : (formData.persona_id ? null as any : NaN),
+        ind_id: indId,
         valor_num: formData.valor_num ? Number.parseFloat(formData.valor_num) : undefined,
         valor_texto: formData.valor_texto || undefined,
         lote: formData.lote || undefined,
@@ -275,34 +250,14 @@ export default function EventosPage() {
                   </Select>
                 </div>
 
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="ind_id">Indicador</Label>
-                    <InfoTip text="El indicador pertenece al módulo seleccionado. La lista se filtra automáticamente." />
-                  </div>
-                  <Select
-                    value={formData.ind_id}
-                    onValueChange={(value) => setFormData((prev) => ({ ...prev, ind_id: value }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar indicador" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {indicadores.map((ind) => (
-                        <SelectItem key={ind.ind_id} value={String(ind.ind_id)}>
-                          {ind.nombre}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                {/* Indicador: ya no se muestra; se enviará un id por defecto según el módulo */}
 
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <Label>Persona (opcional)</Label>
                     <InfoTip text="Selecciona la persona a la que pertenece el evento. Puedes dejarlo en 'Sin persona'." />
                   </div>
-                  <PersonaCombobox
+                  <PersonaSelectList
                     value={formData.persona_id ? Number(formData.persona_id) : null}
                     onChange={(id) => setFormData((prev) => ({ ...prev, persona_id: id ? String(id) : "" }))}
                   />
@@ -314,13 +269,16 @@ export default function EventosPage() {
                     <InfoTip text="Sector geográfico donde se registró el evento. Este campo es obligatorio." />
                   </div>
                   <Select
-                    value={formData.sector_id}
-                    onValueChange={(v) => setFormData((prev) => ({ ...prev, sector_id: v }))}
+                    value={formData.sector_id ? String(formData.sector_id) : "none"}
+                    onValueChange={(v) =>
+                      setFormData((prev) => ({ ...prev, sector_id: v === "none" ? "" : String(v) }))
+                    }
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Seleccionar sector" />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="none">Sin sector</SelectItem>
                       {sectores.map((s) => (
                         <SelectItem key={s.sector_id} value={String(s.sector_id)}>
                           {s.nombre}
@@ -395,7 +353,7 @@ export default function EventosPage() {
                 <Button type="button" variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
                   Cancelar
                 </Button>
-                <Button type="submit" disabled={!formData.ind_id || !formData.sector_id || !formData.fecha_evento}>
+                <Button type="submit" disabled={!formData.fecha_evento}>
                   Crear Evento
                 </Button>
               </div>
