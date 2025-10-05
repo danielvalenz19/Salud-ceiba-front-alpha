@@ -936,20 +936,7 @@ export default function SaludPublicaPage() {
                     <Label htmlFor="metricas">Métricas (JSON Array)</Label>
                     <Textarea
                       id="metricas"
-                      placeholder={`[
-  {
-    "tipo_metrica": "Calidad del aire",
-    "valor": 45.2,
-    "unidad": "μg/m³",
-    "fecha_medicion": "2024-01-15T10:00:00Z"
-  },
-  {
-    "tipo_metrica": "Calidad del agua",
-    "valor": 7.2,
-    "unidad": "pH",
-    "fecha_medicion": "2024-01-15T10:00:00Z"
-  }
-]`}
+                      placeholder={`[\n  {\n    "tipo_metrica": "Calidad del aire",\n    "valor": 45.2,\n    "unidad": "μg/m³",\n    "fecha_medicion": "2024-01-15T10:00:00Z"\n  },\n  {\n    "tipo_metrica": "Calidad del agua",\n    "valor": 7.2,\n    "unidad": "pH",\n    "fecha_medicion": "2024-01-15T10:00:00Z"\n  }\n]`}
                       value={ambienteForm.metricas}
                       onChange={(e) => setAmbienteForm((prev) => ({ ...prev, metricas: e.target.value }))}
                       rows={10}
