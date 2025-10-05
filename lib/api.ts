@@ -79,7 +79,7 @@ class ApiClient {
     this.instance = axios.create({
       baseURL: this.baseURL,
       headers: { "Content-Type": "application/json" },
-      withCredentials: false,
+      withCredentials: (process as any)?.env?.NEXT_PUBLIC_WITH_CREDENTIALS === "true",
     })
 
     // Inject Authorization header

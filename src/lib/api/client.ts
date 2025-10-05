@@ -1,12 +1,15 @@
 import axios from 'axios';
 import { getAccessToken } from '../session';
 
-// Prefer explicit env var, otherwise use relative base to same-origin API gateway
+// Use NEXT_PUBLIC_API_BASE_URL to fully qualify the backend, defaulting to localhost with /api/v1
 const baseURL =
-    (typeof process !== 'undefined' && (process as any).env?.NEXT_PUBLIC_API_URL) ||
-    '/api/v1';
+	(typeof process !== 'undefined' && (process as any).env?.NEXT_PUBLIC_API_BASE_URL) ||
+	'http://localhost:4000/api/v1';
 
-const api = axios.create({ baseURL });
+const withCredentials =
+	(typeof process !== 'undefined' && (process as any).env?.NEXT_PUBLIC_WITH_CREDENTIALS) === 'true';
+
+const api = axios.create({ baseURL, withCredentials });
 
 api.interceptors.request.use((config) => {
 	const token = getAccessToken();
