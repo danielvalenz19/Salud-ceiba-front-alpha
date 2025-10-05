@@ -2,17 +2,24 @@ import api from "@/src/services/api";
 
 /* ----------------- Catálogos ----------------- */
 export async function fetchCausas() {
-  // Try new endpoint /causas, fallback to legacy /morbilidad/causas
+  // Try multiple known routes: salud-publica, generic, legacy morbilidad
+  try {
+    const { data } = await api.get("/salud-publica/causas");
+    return data as Array<{ causa_id: number; nombre: string }>;
+  } catch {}
   try {
     const { data } = await api.get("/causas");
     return data as Array<{ causa_id: number; nombre: string }>;
-  } catch {
-    const { data } = await api.get("/morbilidad/causas");
-    return data as Array<{ causa_id: number; nombre: string }>;
-  }
+  } catch {}
+  const { data } = await api.get("/salud/morbilidad/causas").catch(() => api.get("/morbilidad/causas"));
+  return data as Array<{ causa_id: number; nombre: string }>;
 }
 export async function fetchTerritorios() {
-  const { data } = await api.get("/territorios");
+  try {
+    const { data } = await api.get("/territorios");
+    return data as Array<{ territorio_id: number; nombre: string }>;
+  } catch {}
+  const { data } = await api.get("/salud/territorios");
   return data as Array<{ territorio_id: number; nombre: string }>;
 }
 
@@ -155,8 +162,13 @@ export async function upsertAmbienteMetricas(payload: Array<{
   ind_id: number; territorio_id: number; anio: number; mes: number;
   valor_num: number; valor_den?: number;
 }>) {
-  const { data } = await api.post("/ambiente/metricas", payload);
-  return data;
+  try {
+    const { data } = await api.post("/ambiente/metricas", payload);
+    return data;
+  } catch {
+    const { data } = await api.post("/salud/ambiente/metricas", payload);
+    return data;
+  }
 }
 
 // Alternative body shape per spec: { territorio_id, metricas: [...] }
