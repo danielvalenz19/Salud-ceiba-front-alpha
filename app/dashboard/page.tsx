@@ -282,22 +282,22 @@ export default function DashboardPage() {
                     <YAxis className="text-muted-foreground" />
                     <Tooltip
                       contentStyle={{
-                        backgroundColor: "hsl(var(--card))",
-                        border: "1px solid hsl(var(--border))",
+                        backgroundColor: "var(--card)",
+                        border: "1px solid var(--border)",
                         borderRadius: "6px",
                       }}
                     />
                     <Line
                       type="monotone"
                       dataKey="metricas"
-                      stroke="hsl(var(--primary))"
+                      stroke="var(--primary)"
                       strokeWidth={2}
                       name="Métricas"
                     />
                     <Line
                       type="monotone"
                       dataKey="eventos"
-                      stroke="hsl(var(--secondary))"
+                      stroke="var(--secondary)"
                       strokeWidth={2}
                       name="Eventos"
                     />

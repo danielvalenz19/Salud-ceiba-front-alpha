@@ -3,19 +3,12 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/contexts/auth-context"
-import { LogOut, User, Settings, Shield, Clock, Bell } from "lucide-react"
+import { Shield, Clock, Bell } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import ProfileMenu from "@/components/profile/profile-menu"
 
 export function Topbar() {
   const [isLoggingOut, setIsLoggingOut] = useState(false)
@@ -99,7 +92,7 @@ export function Topbar() {
   }
 
   return (
-    <header className="border-b border-border bg-card/50 backdrop-blur supports-[backdrop-filter]:bg-card/50">
+  <header className="border-b border-border bg-card/50 backdrop-blur supports-[backdrop-filter]:bg-card/50 overflow-visible">
       <div className="flex h-16 items-center justify-between px-6">
         <div className="flex items-center space-x-4">
           <h1 className="text-xl font-bold text-primary">Sistema de Salud Comunitaria</h1>
@@ -126,72 +119,7 @@ export function Topbar() {
             </div>
           )}
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-                <Avatar className="h-8 w-8">
-                  <AvatarFallback className="bg-primary text-primary-foreground text-xs font-medium">
-                    {user ? getUserInitials(user.nombre) : <User className="h-4 w-4" />}
-                  </AvatarFallback>
-                </Avatar>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-64" align="end" forceMount>
-              {user && (
-                <>
-                  <DropdownMenuLabel className="font-normal">
-                    <div className="flex flex-col space-y-2">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium leading-none">{user.nombre}</p>
-                        <Badge variant={getRoleVariant((user as any).rol ?? (user as any).role)} className="text-xs">
-                          {toRoleKey((user as any).rol ?? (user as any).role) || "Invitado"}
-                        </Badge>
-                      </div>
-                      <p className="text-xs leading-none text-muted-foreground">{user.email}</p>
-                      <div className="flex items-center space-x-2 text-xs text-muted-foreground">
-                        <Shield className="h-3 w-3" />
-                        <span>ID: {user.user_id}</span>
-                        <span>•</span>
-                        <span className={user.activo ? "text-green-600" : "text-red-600"}>
-                          {user.activo ? "Activo" : "Inactivo"}
-                        </span>
-                      </div>
-                    </div>
-                  </DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                </>
-              )}
-
-              <DropdownMenuItem>
-                <User className="mr-2 h-4 w-4" />
-                <span>Mi Perfil</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <Settings className="mr-2 h-4 w-4" />
-                <span>Configuración</span>
-              </DropdownMenuItem>
-
-              {user?.rol === "admin" && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem>
-                    <Shield className="mr-2 h-4 w-4" />
-                    <span>Panel de Administración</span>
-                  </DropdownMenuItem>
-                </>
-              )}
-
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={handleLogout}
-                disabled={isLoggingOut}
-                className="text-red-600 focus:text-red-600"
-              >
-                <LogOut className="mr-2 h-4 w-4" />
-                <span>{isLoggingOut ? "Cerrando sesión..." : "Cerrar Sesión"}</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <ProfileMenu />
         </div>
       </div>
     </header>

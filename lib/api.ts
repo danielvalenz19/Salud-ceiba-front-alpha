@@ -224,6 +224,10 @@ class ApiClient {
     }
   }
 
+  async changePassword(payload: { current_password: string; new_password: string }) {
+    return this.post("/auth/change-password", payload)
+  }
+
   // Internal helper used by interceptor. Returns new accessToken
   private async refreshAccessToken(): Promise<string> {
     const rt = this.getRefreshToken()
