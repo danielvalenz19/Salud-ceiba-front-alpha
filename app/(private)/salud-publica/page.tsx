@@ -94,13 +94,13 @@ export default function SaludPublicaPage() {
     casos: "",
   })
 
-  // Form states for Mortalidad
+  // Form states for Mortalidad (detalle requerido por backend)
   const [mortalidadForm, setMortalidadForm] = useState({
     causa_id: "",
     territorio_id: "",
-    anio: new Date().getFullYear().toString(),
-    mes: (new Date().getMonth() + 1).toString(),
-    defunciones: "",
+    fecha_defuncion: "",
+    lugar_defuncion: "",
+    certificador_id: "",
   })
 
   // Form states for Ambiente
@@ -195,36 +195,31 @@ export default function SaludPublicaPage() {
   const handleCreateMortalidadRegistro = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      const registroData = {
-        causa_id: Number.parseInt(mortalidadForm.causa_id),
-        territorio_id: Number.parseInt(mortalidadForm.territorio_id),
-        anio: Number.parseInt(mortalidadForm.anio),
-        mes: Number.parseInt(mortalidadForm.mes),
-        defunciones: Number.parseInt(mortalidadForm.defunciones),
+      const local = mortalidadForm.fecha_defuncion
+      const iso = local ? new Date(local).toISOString() : ""
+      const payload = {
+        causa_id: Number(mortalidadForm.causa_id),
+        territorio_id: Number(mortalidadForm.territorio_id),
+        fecha_defuncion: iso,
+        lugar_defuncion: mortalidadForm.lugar_defuncion.trim(),
+        certificador_id: Number(mortalidadForm.certificador_id),
       }
 
-  await createMortalidadRegistro(registroData)
+      await createMortalidadRegistro(payload)
 
-      toast({
-        title: "Registro creado",
-        description: "El registro de mortalidad se ha creado exitosamente",
-      })
-
+      toast({ title: "Registro creado", description: "El registro de mortalidad se ha creado exitosamente" })
       setIsCreateDialogOpen(false)
       setMortalidadForm({
         causa_id: "",
         territorio_id: "",
-        anio: new Date().getFullYear().toString(),
-        mes: (new Date().getMonth() + 1).toString(),
-        defunciones: "",
+        fecha_defuncion: "",
+        lugar_defuncion: "",
+        certificador_id: "",
       })
+      await cargarMortalidad()
     } catch (error) {
       console.error("Error creating mortalidad registro:", error)
-      toast({
-        title: "Error",
-        description: "No se pudo crear el registro de mortalidad",
-        variant: "destructive",
-      })
+      toast({ title: "Error", description: "No se pudo crear el registro de mortalidad", variant: "destructive" })
     }
   }
 
@@ -676,6 +671,7 @@ export default function SaludPublicaPage() {
                 </DialogHeader>
                 <form onSubmit={handleCreateMortalidadRegistro} className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
+                    {/* Causa */}
                     <div className="space-y-2">
                       <Label htmlFor="causa_id">Causa</Label>
                       <Select
@@ -695,6 +691,7 @@ export default function SaludPublicaPage() {
                       </Select>
                     </div>
 
+                    {/* Territorio */}
                     <div className="space-y-2">
                       <Label htmlFor="territorio_id">Territorio</Label>
                       <Select
@@ -714,56 +711,43 @@ export default function SaludPublicaPage() {
                       </Select>
                     </div>
 
+                    {/* Fecha defunción */}
                     <div className="space-y-2">
-                      <Label htmlFor="anio">Año</Label>
-                      <Select
-                        value={mortalidadForm.anio}
-                        onValueChange={(value) => setMortalidadForm((prev) => ({ ...prev, anio: value }))}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {years.map((year) => (
-                            <SelectItem key={year} value={year.toString()}>
-                              {year}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <Label htmlFor="fecha_defuncion">Fecha de Defunción</Label>
+                      <Input
+                        id="fecha_defuncion"
+                        type="datetime-local"
+                        value={mortalidadForm.fecha_defuncion}
+                        onChange={(e) => setMortalidadForm((prev) => ({ ...prev, fecha_defuncion: e.target.value }))}
+                        required
+                      />
                     </div>
 
+                    {/* Lugar */}
                     <div className="space-y-2">
-                      <Label htmlFor="mes">Mes</Label>
-                      <Select
-                        value={mortalidadForm.mes}
-                        onValueChange={(value) => setMortalidadForm((prev) => ({ ...prev, mes: value }))}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {MESES.map((mes, index) => (
-                            <SelectItem key={index + 1} value={(index + 1).toString()}>
-                              {mes}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <Label htmlFor="lugar_defuncion">Lugar de Defunción</Label>
+                      <Input
+                        id="lugar_defuncion"
+                        placeholder="Hospital / Domicilio / Vía pública…"
+                        value={mortalidadForm.lugar_defuncion}
+                        onChange={(e) => setMortalidadForm((prev) => ({ ...prev, lugar_defuncion: e.target.value }))}
+                        required
+                      />
                     </div>
-                  </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="defunciones">Número de Defunciones</Label>
-                    <Input
-                      id="defunciones"
-                      type="number"
-                      min="0"
-                      placeholder="0"
-                      value={mortalidadForm.defunciones}
-                      onChange={(e) => setMortalidadForm((prev) => ({ ...prev, defunciones: e.target.value }))}
-                      required
-                    />
+                    {/* Certificador */}
+                    <div className="space-y-2">
+                      <Label htmlFor="certificador_id">Certificador (ID)</Label>
+                      <Input
+                        id="certificador_id"
+                        type="number"
+                        min="1"
+                        placeholder="1"
+                        value={mortalidadForm.certificador_id}
+                        onChange={(e) => setMortalidadForm((prev) => ({ ...prev, certificador_id: e.target.value }))}
+                        required
+                      />
+                    </div>
                   </div>
 
                   <div className="flex justify-end gap-2">

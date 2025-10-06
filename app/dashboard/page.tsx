@@ -328,9 +328,11 @@ export default function DashboardPage() {
                 <Activity className="h-6 w-6" />
                 <span>Registrar Evento</span>
               </Button>
-              <Button variant="outline" className="h-20 flex-col space-y-2 bg-transparent">
+              <Button asChild variant="outline" className="h-20 flex-col space-y-2 bg-transparent">
+                <a href="/metricas">
                 <TrendingUp className="h-6 w-6" />
                 <span>Ver Métricas</span>
+                </a>
               </Button>
             </div>
           </CardContent>

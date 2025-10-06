@@ -139,6 +139,17 @@ class ApiClient {
     )
   }
 
+  // Convenience methods to align with axios-like usage in services
+  async get<T = any>(url: string, config?: any): Promise<{ data: T }> {
+    const resp = await this.instance.get(url, config)
+    return { data: resp.data as T }
+  }
+
+  async post<T = any>(url: string, data?: any, config?: any): Promise<{ data: T }> {
+    const resp = await this.instance.post(url, data, config)
+    return { data: resp.data as T }
+  }
+
   // Adapter to keep existing method signatures using RequestInit-like options
   // Normaliza la respuesta de la API para siempre devolver ApiResponse<T>.
   // Si la API ya responde { data, meta, message, error } lo respetamos,
