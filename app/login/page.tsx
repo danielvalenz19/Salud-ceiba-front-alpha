@@ -13,6 +13,7 @@ import { apiClient } from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
 import { Eye, EyeOff } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
+import ThemeToggle from "@/components/shared/theme-toggle"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
@@ -69,7 +70,10 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-card p-4">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-card p-4 relative">
+      <div className="absolute right-4 top-4">
+        <ThemeToggle />
+      </div>
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-bold text-primary">Sistema de Salud</CardTitle>

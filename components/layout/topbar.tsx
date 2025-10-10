@@ -9,6 +9,7 @@ import { useAuth } from "@/contexts/auth-context"
 import { Shield, Clock, Bell } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import ProfileMenu from "@/components/profile/profile-menu"
+import ThemeToggle from "@/components/shared/theme-toggle"
 
 export function Topbar() {
   const [isLoggingOut, setIsLoggingOut] = useState(false)
@@ -94,7 +95,7 @@ export function Topbar() {
   return (
   <header className="border-b border-border bg-card/50 backdrop-blur supports-[backdrop-filter]:bg-card/50 overflow-visible">
       <div className="flex h-16 items-center justify-between px-6">
-        <div className="flex items-center space-x-4">
+  <div className="flex items-center space-x-4">
           <h1 className="text-xl font-bold text-primary">Sistema de Salud Comunitaria</h1>
           {user && (() => {
             const displayRole = toRoleKey((user as any).rol ?? (user as any).role) || "Invitado"
@@ -118,7 +119,8 @@ export function Topbar() {
               </Button>
             </div>
           )}
-
+          {/* Theme switcher */}
+          <ThemeToggle />
           <ProfileMenu />
         </div>
       </div>
