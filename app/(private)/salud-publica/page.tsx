@@ -121,6 +121,16 @@ export default function SaludPublicaPage() {
 
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const { isAuthenticated } = useAuth()
+
+  const causasUniq = useMemo(() => {
+    const seen = new Set<string>()
+    return causas.filter((causa) => {
+      const id = String(causa.causa_id)
+      if (seen.has(id)) return false
+      seen.add(id)
+      return true
+    })
+  }, [causas])
   
   // catálogos iniciales
   useEffect(() => {
@@ -439,15 +449,15 @@ export default function SaludPublicaPage() {
                     <div className="space-y-2">
                       <Label htmlFor="causa_select">Causa</Label>
                       <Select
-                        value={morbilidadForm.causa}
+                        value={morbilidadForm.causa || undefined}
                         onValueChange={(value) => setMorbilidadForm((prev) => ({ ...prev, causa: value }))}
                       >
                         <SelectTrigger id="causa_select">
                           <SelectValue placeholder="Seleccionar causa" />
                         </SelectTrigger>
                         <SelectContent>
-                          {causas.map((causa) => (
-                            <SelectItem key={causa.causa_id} value={String(causa.causa_id)}>
+                          {causasUniq.map((causa, index) => (
+                            <SelectItem key={`${causa.causa_id}-${index}`} value={String(causa.causa_id)}>
                               {causa.nombre ?? `Causa ${causa.causa_id}`}
                             </SelectItem>
                           ))}
@@ -458,7 +468,7 @@ export default function SaludPublicaPage() {
                     <div className="space-y-2">
                       <Label htmlFor="territorio_id">Territorio</Label>
                       <Select
-                        value={morbilidadForm.territorio_id}
+                        value={morbilidadForm.territorio_id || undefined}
                         onValueChange={(value) => setMorbilidadForm((prev) => ({ ...prev, territorio_id: value }))}
                       >
                         <SelectTrigger>
@@ -568,8 +578,8 @@ export default function SaludPublicaPage() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="__all__">Todas las causas</SelectItem>
-                      {causas.map((causa) => (
-                        <SelectItem key={causa.causa_id} value={String(causa.causa_id)}>
+                      {causasUniq.map((causa, index) => (
+                        <SelectItem key={`${causa.causa_id}-${index}`} value={String(causa.causa_id)}>
                           {causa.nombre}
                         </SelectItem>
                       ))}
@@ -729,15 +739,15 @@ export default function SaludPublicaPage() {
                     <div className="space-y-2">
                       <Label htmlFor="causa_mort">Causa</Label>
                       <Select
-                        value={mortalidadForm.causa}
+                        value={mortalidadForm.causa || undefined}
                         onValueChange={(value) => setMortalidadForm((prev) => ({ ...prev, causa: value }))}
                       >
                         <SelectTrigger id="causa_mort">
                           <SelectValue placeholder="Seleccionar causa" />
                         </SelectTrigger>
                         <SelectContent>
-                          {causas.map((causa) => (
-                            <SelectItem key={causa.causa_id} value={String(causa.causa_id)}>
+                          {causasUniq.map((causa, index) => (
+                            <SelectItem key={`${causa.causa_id}-${index}`} value={String(causa.causa_id)}>
                               {causa.nombre ?? `Causa ${causa.causa_id}`}
                             </SelectItem>
                           ))}
@@ -749,7 +759,7 @@ export default function SaludPublicaPage() {
                     <div className="space-y-2">
                       <Label htmlFor="territorio_id">Territorio</Label>
                       <Select
-                        value={mortalidadForm.territorio_id}
+                        value={mortalidadForm.territorio_id || undefined}
                         onValueChange={(value) => setMortalidadForm((prev) => ({ ...prev, territorio_id: value }))}
                       >
                         <SelectTrigger>
