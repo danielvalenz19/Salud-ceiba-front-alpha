@@ -74,7 +74,7 @@ export async function getMorbilidadCasos(params: {
   mes?: number
 }) {
   try {
-    const res = await apiClient.get<MorbilidadRow[]>("/salud/morbilidad", { params })
+    const res = await apiClient.get<MorbilidadRow[]>("/morbilidad/casos", { params })
     return (res.data ?? [])
   } catch {
     try {
@@ -90,9 +90,9 @@ export async function createMorbilidadCaso(payload: {
   anio: number
   mes: number
   territorio_id: number
-  datos: Array<{ causa_id: number; casos: number }>
+  datos: Array<{ causa_id: number; grupo_edad: "0-<1" | "1-4" | "5-14" | "15+"; casos: number }>
 }) {
-  return apiClient.post("/salud/morbilidad", payload)
+  return apiClient.post("/morbilidad/casos", payload)
 }
 
 // ------------------- Mortalidad --------------------

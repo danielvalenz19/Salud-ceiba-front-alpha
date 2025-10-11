@@ -617,11 +617,11 @@ class ApiClient {
     if (params?.territorio_id) searchParams.set('territorio_id', params.territorio_id.toString())
     if (params?.anio) searchParams.set('anio', params.anio.toString())
     if (params?.mes) searchParams.set('mes', params.mes.toString())
-    return this.request<any[]>(`/salud/morbilidad?${searchParams.toString()}`)
+    return this.request<any[]>(`/morbilidad/casos?${searchParams.toString()}`)
   }
 
-  async createMorbilidadCaso(casoData: { causa_id: number; territorio_id: number; anio: number; mes: number; casos_reportados: number }) {
-    return this.request('/salud/morbilidad', { method: 'POST', body: JSON.stringify(casoData) })
+  async createMorbilidadCaso(casoData: { anio: number; mes: number; territorio_id: number; datos: Array<{ causa_id: number; grupo_edad: '0-<1' | '1-4' | '5-14' | '15+'; casos: number }> }) {
+    return this.request('/morbilidad/casos', { method: 'POST', body: JSON.stringify(casoData) })
   }
 
   async createMortalidadRegistro(registroData: { causa_id: number; territorio_id: number; anio: number; mes: number; defunciones: number }) {
