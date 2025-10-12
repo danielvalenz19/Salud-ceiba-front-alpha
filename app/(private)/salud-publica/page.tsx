@@ -32,7 +32,7 @@ import {
   createMortalidadRegistro,
   upsertAmbienteMetricas,
 } from "@/src/services/adminRegs"
-import { fetchCausas as fetchCausasNew, registrarMorbilidad, type GrupoEdad } from "@/src/services/morbilidad"
+import { fetchCausasNew, registrarMorbilidad, type GrupoEdad } from "@/src/services/morbilidad"
 import { mesTextoANumero } from "@/src/lib/date"
 import { useAuth } from "@/contexts/auth-context"
 
@@ -122,32 +122,44 @@ export default function SaludPublicaPage() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const { isAuthenticated } = useAuth()
 
-  const causasUniq = useMemo(() => {
+  const causasOptions = useMemo(() => {
     const seen = new Set<string>()
-    return causas.filter((causa) => {
-      const id = String(causa.causa_id)
-      if (seen.has(id)) return false
-      seen.add(id)
-      return true
-    })
+    return causas
+      .reduce<Array<{ id: string; label: string }>>((acc, causa) => {
+        const id = String(causa.causa_id)
+        if (seen.has(id)) return acc
+        seen.add(id)
+        acc.push({ id, label: causa.nombre?.trim() || `Causa ${id}` })
+        return acc
+      }, [])
+      .sort((a, b) => a.label.localeCompare(b.label))
   }, [causas])
   
   // catálogos iniciales
   useEffect(() => {
     (async () => {
+      const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") ?? undefined : undefined
+
+      const territoriosPromise = fetchTerritorios().catch(() => [])
+
+      let causasData: Causa[] = []
       try {
-        const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') ?? '' : ''
-        const [c, t] = await Promise.all([
-          token ? fetchCausasNew(token) : Promise.resolve([]),
-          fetchTerritorios(),
-        ])
-        setCausas(c)
-        setTerritorios(t)
-      } catch (e) {
-        console.error(e)
+        causasData = await fetchCausasNew(token)
+      } catch (error) {
+        console.error("Error obteniendo catálogo de causas", error)
+        toast({
+          title: "Catálogo no disponible",
+          description: "No se pudieron cargar las causas. Verifica tu sesión o la configuración del API.",
+          variant: "destructive",
+        })
       }
+
+      const territoriosData = await territoriosPromise
+
+      setCausas(causasData)
+      setTerritorios(territoriosData)
     })()
-  }, [])
+  }, [toast])
 
   const cargarMorbilidad = async () => {
     try {
@@ -456,11 +468,17 @@ export default function SaludPublicaPage() {
                           <SelectValue placeholder="Seleccionar causa" />
                         </SelectTrigger>
                         <SelectContent>
-                          {causasUniq.map((causa, index) => (
-                            <SelectItem key={`${causa.causa_id}-${index}`} value={String(causa.causa_id)}>
-                              {causa.nombre ?? `Causa ${causa.causa_id}`}
+                          {causasOptions.length === 0 ? (
+                            <SelectItem value="__empty" disabled>
+                              Sin catálogo de causas (verifica login/endpoint)
                             </SelectItem>
-                          ))}
+                          ) : (
+                            causasOptions.map((causa) => (
+                              <SelectItem key={causa.id} value={causa.id}>
+                                {causa.label}
+                              </SelectItem>
+                            ))
+                          )}
                         </SelectContent>
                       </Select>
                     </div>
@@ -578,11 +596,17 @@ export default function SaludPublicaPage() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="__all__">Todas las causas</SelectItem>
-                      {causasUniq.map((causa, index) => (
-                        <SelectItem key={`${causa.causa_id}-${index}`} value={String(causa.causa_id)}>
-                          {causa.nombre}
+                      {causasOptions.length === 0 ? (
+                        <SelectItem value="__empty" disabled>
+                          Sin catálogo de causas (verifica login/endpoint)
                         </SelectItem>
-                      ))}
+                      ) : (
+                        causasOptions.map((causa) => (
+                          <SelectItem key={causa.id} value={causa.id}>
+                            {causa.label}
+                          </SelectItem>
+                        ))
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
@@ -746,11 +770,17 @@ export default function SaludPublicaPage() {
                           <SelectValue placeholder="Seleccionar causa" />
                         </SelectTrigger>
                         <SelectContent>
-                          {causasUniq.map((causa, index) => (
-                            <SelectItem key={`${causa.causa_id}-${index}`} value={String(causa.causa_id)}>
-                              {causa.nombre ?? `Causa ${causa.causa_id}`}
+                          {causasOptions.length === 0 ? (
+                            <SelectItem value="__empty" disabled>
+                              Sin catálogo de causas (verifica login/endpoint)
                             </SelectItem>
-                          ))}
+                          ) : (
+                            causasOptions.map((causa) => (
+                              <SelectItem key={causa.id} value={causa.id}>
+                                {causa.label}
+                              </SelectItem>
+                            ))
+                          )}
                         </SelectContent>
                       </Select>
                     </div>
