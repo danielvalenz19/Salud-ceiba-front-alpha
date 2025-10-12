@@ -1,4 +1,5 @@
 import { ENDPOINTS } from "@/src/endpoints"
+import { authFetch } from "@/src/lib/authFetch"
 
 export type CrearCasoItem = {
   causa_id: number
@@ -16,16 +17,17 @@ export type CrearCasoPayload = {
 export async function crearMorbilidad(payload: CrearCasoPayload) {
   console.debug("[POST]", ENDPOINTS.morbilidad.casos, payload)
 
-  const response = await fetch(ENDPOINTS.morbilidad.casos, {
+  const response = await authFetch(ENDPOINTS.morbilidad.casos, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify(payload),
+    body: JSON.stringify({
+      ...payload,
+      datos: payload.datos.map(({ cantidad, ...rest }) => ({ ...rest, casos: cantidad })),
+    }),
   })
 
   if (!response.ok) {
     const msg = await response.text().catch(() => "")
-    throw new Error(`POST /morbilidad/casos → ${response.status} ${msg}`)
+    throw new Error(`POST morbilidad/casos ${response.status} ${msg}`)
   }
 
   return response.json().catch(() => ({}))
