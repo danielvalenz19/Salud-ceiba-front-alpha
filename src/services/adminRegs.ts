@@ -37,8 +37,8 @@ export type MortalidadDetalleRow = {
 export async function fetchCausas() {
   // Try known endpoints in order; return [] if none exists
   const paths = [
+    "/causas",
     "/catalogos/causas",
-    "/salud-publica/causas",
     "/salud/morbilidad/causas",
     "/morbilidad/causas",
   ]

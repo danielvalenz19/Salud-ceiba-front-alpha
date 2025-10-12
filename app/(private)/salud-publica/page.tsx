@@ -21,7 +21,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { AlertTriangle, Heart, Leaf, Plus } from "lucide-react"
-import { useToast } from "@/hooks/use-toast"
+import CausaSelect from "@/components/morbilidad/CausaSelect"
 import {
   fetchTerritorios,
   getMorbilidadCasos,
@@ -32,14 +32,41 @@ import {
   createMortalidadRegistro,
   upsertAmbienteMetricas,
 } from "@/src/services/adminRegs"
-import { fetchCausasNew, registrarMorbilidad, type GrupoEdad } from "@/src/services/morbilidad"
-import { mesTextoANumero } from "@/src/lib/date"
+import { crearMorbilidad } from "@/src/services/morbilidad"
 import { useAuth } from "@/contexts/auth-context"
+import { useToast } from "@/hooks/use-toast"
+import { useCausas } from "@/hooks/useCausas"
+import { mesToNumber, toNumberOrNull } from "@/src/utils/fechas"
 
 const toNum = (v: any) => (v === undefined || v === null || v === "" ? undefined : Number(v))
-
-type Causa = { causa_id: number; nombre?: string }
 type Territorio = { territorio_id: number; nombre: string }
+
+type GrupoEdad = "0-<1" | "1-4" | "5-14" | "15+"
+
+const getCausaDisplay = (
+  row: { causa_nombre?: string | null; causa_id?: number | null } & Record<string, unknown>
+) => {
+  const raw = row && typeof row === "object" ? row["causa"] : undefined
+  if (typeof raw === "string" && raw.trim()) return raw
+  if (row.causa_nombre && row.causa_nombre.trim()) return row.causa_nombre
+  return row.causa_id != null ? `#${row.causa_id}` : "Sin causa"
+}
+
+type MorbilidadFormState = {
+  causa_id: number | null
+  territorio_id: string
+  anio: string
+  mes: string
+  cantidad: string
+}
+
+type MortalidadFormState = {
+  causa_id: number | null
+  territorio_id: string
+  fecha_defuncion: string
+  lugar_defuncion: string
+  certificador_id: string
+}
 
 const TIPOS_AMBIENTE = [
   "Calidad del aire",
@@ -67,7 +94,9 @@ const MESES = [
 
 export default function SaludPublicaPage() {
   // catálogos
-  const [causas, setCausas] = useState<Causa[]>([])
+  const [authToken, setAuthToken] = useState<string | undefined>(undefined)
+  const { causas, loading: causasLoading, error: causasError } = useCausas(authToken)
+  const causaOptions = useMemo(() => causas.map((c) => ({ id: String(c.id), label: c.label })), [causas])
   const [territorios, setTerritorios] = useState<Territorio[]>([])
 
   // Morbilidad
@@ -88,17 +117,17 @@ export default function SaludPublicaPage() {
   const { toast } = useToast()
 
   // Form states for Morbilidad
-  const [morbilidadForm, setMorbilidadForm] = useState({
-    causa: "",
+  const [morbilidadForm, setMorbilidadForm] = useState<MorbilidadFormState>({
+    causa_id: null,
     territorio_id: "",
     anio: new Date().getFullYear().toString(),
     mes: (new Date().getMonth() + 1).toString(),
-    casos: "",
+    cantidad: "",
   })
 
   // Form states for Mortalidad (detalle requerido por backend)
-  const [mortalidadForm, setMortalidadForm] = useState({
-    causa: "",
+  const [mortalidadForm, setMortalidadForm] = useState<MortalidadFormState>({
+    causa_id: null,
     territorio_id: "",
     fecha_defuncion: "",
     lugar_defuncion: "",
@@ -122,44 +151,43 @@ export default function SaludPublicaPage() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const { isAuthenticated } = useAuth()
 
-  const causasOptions = useMemo(() => {
-    const seen = new Set<string>()
-    return causas
-      .reduce<Array<{ id: string; label: string }>>((acc, causa) => {
-        const id = String(causa.causa_id)
-        if (seen.has(id)) return acc
-        seen.add(id)
-        acc.push({ id, label: causa.nombre?.trim() || `Causa ${id}` })
-        return acc
-      }, [])
-      .sort((a, b) => a.label.localeCompare(b.label))
-  }, [causas])
-  
   // catálogos iniciales
   useEffect(() => {
-    (async () => {
-      const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") ?? undefined : undefined
+    if (typeof window === "undefined") return
+    const token = localStorage.getItem("accessToken") ?? undefined
+    setAuthToken(token)
+  }, [isAuthenticated])
 
-      const territoriosPromise = fetchTerritorios().catch(() => [])
+  useEffect(() => {
+    let active = true
+    fetchTerritorios()
+      .then((data) => {
+        if (active) setTerritorios(data)
+      })
+      .catch((error) => {
+        console.error("Error obteniendo territorios", error)
+        if (active) {
+          toast({
+            title: "Catálogo no disponible",
+            description: "No se pudieron cargar los territorios.",
+            variant: "destructive",
+          })
+        }
+      })
 
-      let causasData: Causa[] = []
-      try {
-        causasData = await fetchCausasNew(token)
-      } catch (error) {
-        console.error("Error obteniendo catálogo de causas", error)
-        toast({
-          title: "Catálogo no disponible",
-          description: "No se pudieron cargar las causas. Verifica tu sesión o la configuración del API.",
-          variant: "destructive",
-        })
-      }
-
-      const territoriosData = await territoriosPromise
-
-      setCausas(causasData)
-      setTerritorios(territoriosData)
-    })()
+    return () => {
+      active = false
+    }
   }, [toast])
+
+  useEffect(() => {
+    if (!causasError) return
+    toast({
+      title: "Catálogo no disponible",
+      description: "No se pudieron cargar las causas. Verifica tu sesión o la configuración del API.",
+      variant: "destructive",
+    })
+  }, [causasError, toast])
 
   const cargarMorbilidad = async () => {
     try {
@@ -183,43 +211,73 @@ export default function SaludPublicaPage() {
     }
   }
 
-  // Convierte un texto ingresado (ID o nombre) a un causa_id válido
-  function resolveCausaId(input: string): number | null {
-    const trimmed = (input ?? "").trim()
-    if (!trimmed) return null
-    // Si es número válido, usar como ID
-    if (/^\d+$/.test(trimmed)) {
-      const id = Number.parseInt(trimmed, 10)
-      return Number.isFinite(id) && id > 0 ? id : null
-    }
-    // Buscar por nombre (case-insensitive, match exact primero, luego incluye)
-    const lower = trimmed.toLowerCase()
-  let found = causas.find((c) => (c.nombre ?? "").toLowerCase() === lower)
-  if (!found) found = causas.find((c) => (c.nombre ?? "").toLowerCase().includes(lower))
-    return found ? found.causa_id : null
-  }
 
   const handleCreateMorbilidadCaso = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      const causaId = resolveCausaId(morbilidadForm.causa)
-      if (!causaId) {
+      const causaId = toNumberOrNull(morbilidadForm.causa_id)
+
+      if (causaId === null || causaId <= 0) {
         toast({
           title: "Causa inválida",
-          description: "Ingresa un ID válido o un nombre de causa existente.",
+          description: "Selecciona una causa del listado.",
           variant: "destructive",
         })
         return
       }
-      const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') ?? '' : ''
-      const payload = {
-        anio: Number.parseInt(morbilidadForm.anio),
-        mes: Number.isNaN(Number(morbilidadForm.mes)) ? mesTextoANumero(MESES[Number(morbilidadForm.mes) - 1]) : Number(morbilidadForm.mes),
-        territorio_id: Number.parseInt(morbilidadForm.territorio_id),
-        datos: [{ causa_id: causaId, grupo_edad: grupoEdad, casos: Number.parseInt(morbilidadForm.casos) }],
+
+      const territorioId = toNumberOrNull(morbilidadForm.territorio_id)
+  if (territorioId === null || territorioId <= 0) {
+        toast({
+          title: "Territorio requerido",
+          description: "Selecciona un territorio para registrar el caso.",
+          variant: "destructive",
+        })
+        return
       }
 
-      await registrarMorbilidad(token, payload)
+      const anio = toNumberOrNull(morbilidadForm.anio)
+  if (anio === null || anio < 1900) {
+        toast({
+          title: "Año inválido",
+          description: "Selecciona un año válido.",
+          variant: "destructive",
+        })
+        return
+      }
+
+      const mesNumero = mesToNumber(morbilidadForm.mes)
+      if (!mesNumero || mesNumero < 1 || mesNumero > 12) {
+        toast({
+          title: "Mes inválido",
+          description: "Selecciona un mes válido.",
+          variant: "destructive",
+        })
+        return
+      }
+
+      const cantidad = toNumberOrNull(morbilidadForm.cantidad)
+      if (cantidad === null || cantidad <= 0) {
+        toast({
+          title: "Cantidad inválida",
+          description: "Ingresa un número mayor a cero para la cantidad de casos.",
+          variant: "destructive",
+        })
+        return
+      }
+
+      const payload = {
+        anio,
+        mes: mesNumero,
+        territorio_id: territorioId,
+        datos: [{
+          causa_id: causaId,
+          grupo_edad: grupoEdad,
+          cantidad,
+        }],
+      }
+
+      await crearMorbilidad(payload)
 
       toast({
         title: "Caso registrado",
@@ -228,11 +286,11 @@ export default function SaludPublicaPage() {
 
       setIsCreateDialogOpen(false)
       setMorbilidadForm({
-        causa: "",
+        causa_id: null,
         territorio_id: "",
         anio: new Date().getFullYear().toString(),
         mes: (new Date().getMonth() + 1).toString(),
-        casos: "",
+        cantidad: "",
       })
       await cargarMorbilidad()
     } catch (error) {
@@ -250,11 +308,20 @@ export default function SaludPublicaPage() {
     try {
       const local = mortalidadForm.fecha_defuncion
       const iso = local ? new Date(local).toISOString() : ""
-      const causaId = resolveCausaId(mortalidadForm.causa)
-      if (!causaId) {
+      const causaId = mortalidadForm.causa_id
+
+      if (!causaId || Number.isNaN(causaId) || causaId <= 0) {
         toast({
           title: "Causa inválida",
-          description: "Ingresa un ID válido o un nombre de causa existente.",
+          description: "Selecciona una causa del listado.",
+          variant: "destructive",
+        })
+        return
+      }
+      if (!mortalidadForm.territorio_id) {
+        toast({
+          title: "Territorio requerido",
+          description: "Selecciona un territorio para registrar la defunción.",
           variant: "destructive",
         })
         return
@@ -272,7 +339,7 @@ export default function SaludPublicaPage() {
       toast({ title: "Registro creado", description: "El registro de mortalidad se ha creado exitosamente" })
       setIsCreateDialogOpen(false)
       setMortalidadForm({
-        causa: "",
+        causa_id: null,
         territorio_id: "",
         fecha_defuncion: "",
         lugar_defuncion: "",
@@ -458,30 +525,12 @@ export default function SaludPublicaPage() {
                 </DialogHeader>
                 <form onSubmit={handleCreateMorbilidadCaso} className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="causa_select">Causa</Label>
-                      <Select
-                        value={morbilidadForm.causa || undefined}
-                        onValueChange={(value) => setMorbilidadForm((prev) => ({ ...prev, causa: value }))}
-                      >
-                        <SelectTrigger id="causa_select">
-                          <SelectValue placeholder="Seleccionar causa" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {causasOptions.length === 0 ? (
-                            <SelectItem value="__empty" disabled>
-                              Sin catálogo de causas (verifica login/endpoint)
-                            </SelectItem>
-                          ) : (
-                            causasOptions.map((causa) => (
-                              <SelectItem key={causa.id} value={causa.id}>
-                                {causa.label}
-                              </SelectItem>
-                            ))
-                          )}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                    <CausaSelect
+                      token={authToken}
+                      value={morbilidadForm.causa_id}
+                      onChange={(id) => setMorbilidadForm((prev) => ({ ...prev, causa_id: id }))}
+                      className="space-y-2"
+                    />
 
                     <div className="space-y-2">
                       <Label htmlFor="territorio_id">Territorio</Label>
@@ -562,8 +611,8 @@ export default function SaludPublicaPage() {
                       type="number"
                       min="0"
                       placeholder="0"
-                      value={morbilidadForm.casos}
-                      onChange={(e) => setMorbilidadForm((prev) => ({ ...prev, casos: e.target.value }))}
+                      value={morbilidadForm.cantidad}
+                      onChange={(e) => setMorbilidadForm((prev) => ({ ...prev, cantidad: e.target.value }))}
                       required
                     />
                   </div>
@@ -596,12 +645,20 @@ export default function SaludPublicaPage() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="__all__">Todas las causas</SelectItem>
-                      {causasOptions.length === 0 ? (
+                      {causasLoading ? (
+                        <SelectItem value="__loading" disabled>
+                          Cargando causas...
+                        </SelectItem>
+                      ) : causasError ? (
+                        <SelectItem value="__error" disabled>
+                          ¡{causasError}!
+                        </SelectItem>
+                      ) : causaOptions.length === 0 ? (
                         <SelectItem value="__empty" disabled>
                           Sin catálogo de causas (verifica login/endpoint)
                         </SelectItem>
                       ) : (
-                        causasOptions.map((causa) => (
+                        causaOptions.map((causa) => (
                           <SelectItem key={causa.id} value={causa.id}>
                             {causa.label}
                           </SelectItem>
@@ -718,7 +775,7 @@ export default function SaludPublicaPage() {
                       ) : (
                         morRows.map((r, idx) => (
                           <TableRow key={idx}>
-                            <TableCell className="font-medium">{r.causa_nombre ?? r.causa_id}</TableCell>
+                            <TableCell className="font-medium">{getCausaDisplay(r as any)}</TableCell>
                             <TableCell>{r.territorio_nombre ?? r.territorio_id}</TableCell>
                             <TableCell>
                               <Badge variant="outline">{String(r.mes).padStart(2, "0")} {r.anio}</Badge>
@@ -760,30 +817,12 @@ export default function SaludPublicaPage() {
                 <form onSubmit={handleCreateMortalidadRegistro} className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
                     {/* Causa */}
-                    <div className="space-y-2">
-                      <Label htmlFor="causa_mort">Causa</Label>
-                      <Select
-                        value={mortalidadForm.causa || undefined}
-                        onValueChange={(value) => setMortalidadForm((prev) => ({ ...prev, causa: value }))}
-                      >
-                        <SelectTrigger id="causa_mort">
-                          <SelectValue placeholder="Seleccionar causa" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {causasOptions.length === 0 ? (
-                            <SelectItem value="__empty" disabled>
-                              Sin catálogo de causas (verifica login/endpoint)
-                            </SelectItem>
-                          ) : (
-                            causasOptions.map((causa) => (
-                              <SelectItem key={causa.id} value={causa.id}>
-                                {causa.label}
-                              </SelectItem>
-                            ))
-                          )}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                    <CausaSelect
+                      token={authToken}
+                      value={mortalidadForm.causa_id}
+                      onChange={(id) => setMortalidadForm((prev) => ({ ...prev, causa_id: id }))}
+                      className="space-y-2"
+                    />
 
                     {/* Territorio */}
                     <div className="space-y-2">
@@ -908,7 +947,7 @@ export default function SaludPublicaPage() {
                       {!mortLoading &&
                         mortAggRows.map((r, i) => (
                           <TableRow key={i}>
-                            <TableCell>{r.causa_nombre ?? r.causa_id}</TableCell>
+                            <TableCell>{getCausaDisplay(r as any)}</TableCell>
                             <TableCell>{r.territorio_nombre ?? r.territorio_id}</TableCell>
                             <TableCell>
                               <Badge variant="outline">{String(r.mes).padStart(2, "0")} {r.anio}</Badge>
@@ -955,7 +994,7 @@ export default function SaludPublicaPage() {
                         mortDetRows.map((r) => (
                           <TableRow key={r.registro_id}>
                             <TableCell>{r.registro_id}</TableCell>
-                            <TableCell>{r.causa_nombre ?? r.causa_id}</TableCell>
+                            <TableCell>{getCausaDisplay(r as any)}</TableCell>
                             <TableCell>{r.territorio_nombre ?? r.territorio_id}</TableCell>
                             <TableCell>{new Date(r.fecha_defuncion).toLocaleDateString()}</TableCell>
                             <TableCell className="text-right">{r.defunciones}</TableCell>
