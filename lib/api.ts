@@ -624,8 +624,8 @@ class ApiClient {
     return this.request('/morbilidad/casos', { method: 'POST', body: JSON.stringify(casoData) })
   }
 
-  async createMortalidadRegistro(registroData: { causa_id: number; territorio_id: number; anio: number; mes: number; defunciones: number }) {
-    return this.request('/salud/mortalidad', { method: 'POST', body: JSON.stringify(registroData) })
+  async createMortalidadRegistro(registroData: { causa_id: number; territorio_id: number; fecha_defuncion: string; lugar_defuncion?: string; certificador_id?: number }) {
+    return this.request('/mortalidad/registros', { method: 'POST', body: JSON.stringify(registroData) })
   }
 
   async createAmbienteMetricas(metricas: any[]) {

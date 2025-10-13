@@ -105,17 +105,8 @@ export async function getMortalidadRegistros(params: {
   page?: number
   limit?: number
 }) {
-  try {
-    const res = await apiClient.get<MortalidadAggRow[] | MortalidadDetalleRow[]>("/salud/mortalidad", { params })
-    return res.data as any
-  } catch {
-    try {
-      const res = await apiClient.get<MortalidadAggRow[] | MortalidadDetalleRow[]>("/mortalidad/registros", { params })
-      return res.data as any
-    } catch {
-      return []
-    }
-  }
+  const res = await apiClient.get<MortalidadAggRow[] | MortalidadDetalleRow[]>("/mortalidad/registros", { params })
+  return res.data as any
 }
 
 export async function createMortalidadRegistro(payload: {
@@ -125,7 +116,7 @@ export async function createMortalidadRegistro(payload: {
   lugar_defuncion: string
   certificador_id: number
 }) {
-  return apiClient.post("/salud/mortalidad", payload)
+  return apiClient.post("/mortalidad/registros", payload)
 }
 
 // -------------------- Ambiente --------------------
